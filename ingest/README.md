@@ -33,10 +33,11 @@ From the repository root:
 This single command:
 - ✅ Clones immersive-web-sdk from GitHub to `.temp/` (gitignored)
 - ✅ Runs `pnpm install` and `npm run build:tgz`
-- ✅ Ingests IWSDK source code (27 components, 17 systems)
-- ✅ Ingests dependencies (Three.js, WebXR types)
+- ✅ Ingests IWSDK source code (28 components, 17 systems)
+- ✅ Ingests dependencies (Three.js, WebXR types, elics)
 - ✅ Exports to JSON for MCP server
-- ✅ Runs health check validation
+- ✅ Copies source files to `mcp/data/sources/` for reference
+- ✅ Runs health check validation (validates 3337 chunks, 63 WebXR API usages)
 - ✅ Cleans up cloned repo (use `--keep-repo` to inspect)
 
 **No manual paths needed - everything is automated!**

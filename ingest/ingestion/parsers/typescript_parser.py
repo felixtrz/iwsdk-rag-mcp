@@ -206,6 +206,9 @@ class TypeScriptParser:
         # Detect ECS patterns
         self._detect_ecs_patterns(chunk)
 
+        # Detect WebXR API usage
+        self._detect_webxr_patterns(chunk)
+
         return chunk
 
     def _parse_function(self, func_node: Node, source_code: bytes, file_path: str,
@@ -362,6 +365,9 @@ class TypeScriptParser:
 
                 # Extract calls from the value expression
                 self._extract_function_calls(value_node, source_code, chunk)
+
+                # Detect WebXR API usage
+                self._detect_webxr_patterns(chunk)
 
                 chunks.append(chunk)
 

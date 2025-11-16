@@ -405,6 +405,138 @@ def run_health_check() -> bool:
     return vector_ok and export_ok
 
 
+def copy_source_files(iwsdk_dir: Path):
+    """Copy source files to mcp/data/sources for reference."""
+    print("=" * 80)
+    print("📋 COPYING SOURCE FILES")
+    print("=" * 80)
+    print()
+
+    # Get repo root and MCP sources directory
+    repo_root = Path(__file__).parent.parent.parent
+    sources_dir = repo_root / "mcp" / "data" / "sources"
+
+    print(f"📁 Source directory: {sources_dir}")
+    print()
+
+    # Clear existing sources
+    if sources_dir.exists():
+        print("🧹 Clearing existing source files...")
+        shutil.rmtree(sources_dir)
+
+    sources_dir.mkdir(parents=True, exist_ok=True)
+    print("✅ Source directory ready")
+    print()
+
+    # 1. Copy IWSDK runtime packages
+    print("📦 Copying IWSDK runtime packages...")
+    iwsdk_target = sources_dir / "iwsdk"
+    iwsdk_target.mkdir(exist_ok=True)
+
+    packages_dir = iwsdk_dir / "packages"
+    for package_name in IWSDK_RUNTIME_PACKAGES:
+        package_src = packages_dir / package_name / "src"
+        if package_src.exists():
+            package_target = iwsdk_target / package_name
+            print(f"  - Copying {package_name}...")
+            shutil.copytree(package_src, package_target, dirs_exist_ok=True)
+        else:
+            print(f"  ⚠️  Package {package_name}/src not found")
+
+    print(f"✅ Copied {len(IWSDK_RUNTIME_PACKAGES)} IWSDK packages")
+    print()
+
+    # 2. Copy dependency type definitions
+    print("📦 Copying dependency type definitions...")
+    deps_target = sources_dir / "deps"
+    deps_target.mkdir(exist_ok=True)
+
+    # Find dependency paths (handle pnpm's nested structure)
+    node_modules = iwsdk_dir / "node_modules"
+
+    # Copy Three.js types
+    three_sources = [
+        node_modules / "@types" / "three",  # Direct path
+        node_modules / ".pnpm" / "node_modules" / "@types" / "three",  # pnpm structure
+    ]
+    for three_src in three_sources:
+        if three_src.exists():
+            three_target = deps_target / "three"
+            print(f"  - Copying three.js types from {three_src.name}...")
+            shutil.copytree(three_src, three_target, dirs_exist_ok=True)
+            break
+    else:
+        print("  ⚠️  Three.js types not found")
+
+    # Copy WebXR types (handle pnpm's versioned structure)
+    webxr_found = False
+    pnpm_dir = node_modules / ".pnpm"
+    if pnpm_dir.exists():
+        # Look for @types+webxr@* directories
+        for item in pnpm_dir.iterdir():
+            if item.is_dir() and item.name.startswith("@types+webxr@"):
+                webxr_src = item / "node_modules" / "@types" / "webxr"
+                if webxr_src.exists():
+                    webxr_target = deps_target / "webxr"
+                    print(f"  - Copying WebXR types from {item.name}...")
+                    shutil.copytree(webxr_src, webxr_target, dirs_exist_ok=True)
+                    webxr_found = True
+                    break
+
+    if not webxr_found:
+        # Fallback to direct path
+        webxr_src = node_modules / "@types" / "webxr"
+        if webxr_src.exists():
+            webxr_target = deps_target / "webxr"
+            print(f"  - Copying WebXR types from @types/webxr...")
+            shutil.copytree(webxr_src, webxr_target, dirs_exist_ok=True)
+            webxr_found = True
+
+    if not webxr_found:
+        print("  ⚠️  WebXR types not found")
+
+    print("✅ Copied dependency type definitions")
+    print()
+
+    # 3. Copy elics (ECS library) - handle pnpm's versioned structure
+    # Note: elics has .d.ts files in lib/ directory, not src/
+    print("📦 Copying elics (ECS library)...")
+    elics_found = False
+    if pnpm_dir.exists():
+        # Look for elics@* directories
+        for item in pnpm_dir.iterdir():
+            if item.is_dir() and item.name.startswith("elics@"):
+                elics_lib_dir = item / "node_modules" / "elics" / "lib"
+                if elics_lib_dir.exists():
+                    elics_target = sources_dir / "elics" / "src"  # Keep as /src for consistency
+                    print(f"  - Copying elics from {item.name}...")
+                    shutil.copytree(elics_lib_dir, elics_target, dirs_exist_ok=True)
+                    elics_found = True
+                    break
+
+    if not elics_found:
+        # Fallback to direct path (lib directory)
+        elics_lib_dir = node_modules / "elics" / "lib"
+        if elics_lib_dir.exists():
+            elics_target = sources_dir / "elics" / "src"
+            print(f"  - Copying elics from elics/lib...")
+            shutil.copytree(elics_lib_dir, elics_target, dirs_exist_ok=True)
+            elics_found = True
+
+    if not elics_found:
+        print("  ⚠️  elics not found")
+
+    print("✅ Copied elics library")
+    print()
+
+    print("=" * 80)
+    print("✅ SOURCE FILES COPIED")
+    print("=" * 80)
+    print()
+    print(f"Source files available at: {sources_dir}")
+    print()
+
+
 def main():
     """Main ingestion pipeline."""
     parser = argparse.ArgumentParser(
@@ -457,6 +589,9 @@ def main():
 
         # Export to JSON
         export_to_json()
+
+        # Copy source files for reference
+        copy_source_files(iwsdk_dir)
 
         # Health check
         health_ok = run_health_check()

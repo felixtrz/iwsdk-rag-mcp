@@ -12,7 +12,7 @@ This directory contains pre-processed code chunks and embeddings for the IWSDK R
 - **Total chunks:** 3337
 - **Embedding model:** sentence-transformers/all-MiniLM-L6-v2
 - **Embedding dimensions:** 384
-- **Generated:** 2025-11-16T17:39:37.267577Z
+- **Generated:** 2025-11-16T18:19:11.479932Z
 
 ### Sources
 

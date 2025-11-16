@@ -32,6 +32,7 @@ chroma_db/
 # Embeddings & Data
 mcp/data/chunks.json
 mcp/data/metadata.json
+mcp/data/sources/
 
 # IDE
 .vscode/

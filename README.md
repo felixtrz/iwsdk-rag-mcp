@@ -72,6 +72,7 @@ This automatically:
 - ✅ Ingests IWSDK source code (27 components, 17 systems)
 - ✅ Ingests dependencies (Three.js, WebXR types)
 - ✅ Exports to JSON for MCP server
+- ✅ Copies source files to `mcp/data/sources/` for reference
 - ✅ Validates data integrity
 - ✅ Cleans up cloned repo (use `--keep-repo` to keep it)
 
@@ -126,10 +127,11 @@ Restart Claude Desktop, then ask questions like:
 
 ### Smart Pattern Detection
 
-- **ECS Components**: Detects `createComponent()` factory pattern
-- **ECS Systems**: Detects `extends createSystem()` pattern
+- **ECS Components**: Detects `createComponent()` factory pattern (28 found)
+- **ECS Systems**: Detects `extends createSystem()` pattern (17 found)
 - **Relationships**: Tracks extends, implements, imports, calls
-- **API Usage**: WebXR and Three.js API detection
+- **WebXR API Usage**: Tracks 63 chunks using XRSession, XRFrame, XRInputSource, etc.
+- **Three.js Detection**: Identifies Three.js API usage patterns
 
 ### AST-Aware Chunking
 
@@ -161,9 +163,9 @@ iwsdk-rag/
 │   │   └── embedders/        # Embedding models
 │   ├── storage/              # ChromaDB wrapper
 │   └── scripts/              # Ingestion scripts
-│       ├── ingest_multi.py      # Ingest IWSDK
-│       ├── ingest_deps.py       # Ingest dependencies
-│       └── export_for_npm.py    # Export to JSON
+│       ├── ingest_all.py        # Complete pipeline
+│       ├── export_for_npm.py    # Export to JSON
+│       └── health_check.py      # Validation
 │
 ├── mcp/                         # TypeScript MCP server
 │   ├── README.md               # MCP server documentation
@@ -183,15 +185,24 @@ iwsdk-rag/
 └── README.md                    # This file
 ```
 
-## Bug Fixes
+## Recent Improvements
 
-This codebase includes fixes for 3 critical bugs found during development:
+### WebXR API Detection (2025-11-16)
+- **Issue**: WebXR API usage (XRSession, XRFrame, etc.) was not being detected
+- **Fix**: Added `_detect_webxr_patterns()` calls to class and component parsing
+- **Result**: 63 chunks now properly tracked for WebXR API usage
+- **Files**: `ingest/ingestion/parsers/typescript_parser.py`, `ingest/storage/vector_store.py`
 
+### Source File Automation (2025-11-16)
+- **Issue**: `mcp/data/sources/` was manually maintained
+- **Fix**: Automated copying of source files during ingestion
+- **Result**: IWSDK packages, Three.js types, WebXR types, and elics are automatically copied
+- **Files**: `ingest/scripts/ingest_all.py`
+
+### Earlier Bug Fixes
 1. **Parser Bug**: Added detection for `createComponent()` factory pattern
 2. **Chunker Metadata Bug**: Preserve ECS flags during chunk merging/expansion
 3. **Chunker Skip Bug**: Track consumed indices to prevent skipped/duplicated chunks
-
-See commit history for details.
 
 ## Development Workflow
 

@@ -429,7 +429,7 @@ Parameters:
 
 ---
 
-### **Test 11: WebXR API Usage Tracking** ⚠️
+### **Test 11: WebXR API Usage Tracking** ✅
 
 **Objective:** Verify that the server can track usage of WebXR APIs.
 
@@ -445,22 +445,27 @@ Parameters:
 ```
 
 **Expected Results:**
-- **KNOWN ISSUE:** This currently returns no results
-- Theoretically should find code using XRSession API
-- Expected (but not found):
+- Should find code using XRSession API (63 chunks total with WebXR usage)
+- Common results:
   - XRInputManager using XRSession
   - Systems accessing session.inputSources
   - Code handling XR session lifecycle
+  - XROrigin, BaseControllerVisual, etc.
+- Each result should show:
+  - Code using XRSession, XRFrame, XRInputSource, XRHand, or XRReferenceSpace
+  - Full class/function implementation
+  - Context around the WebXR API usage
 
 **Pass Criteria:**
-- ⚠️ **Currently Fails** - Returns "No code found"
-- This is a known limitation of the current indexing pipeline
-- WebXR API usage tracking needs investigation
+- ✅ Returns 5+ results using XRSession
+- ✅ Results include XRInputManager and other core classes
+- ✅ Each result shows actual WebXR API usage in the code
+- ✅ Results include meaningful context
 
 **Notes:**
-- This test documents a known gap in the MCP server
-- The feature exists but doesn't currently work as expected
-- XRSession, XRFrame, XRInputSource tracking is not functional
+- **Fixed 2025-11-16**: WebXR API detection now works correctly
+- 63 chunks are tracked for WebXR API usage across the codebase
+- Detection includes: XRSession, XRFrame, XRReferenceSpace, XRViewerPose, XRInputSource, XRHand
 
 ---
 
@@ -644,9 +649,8 @@ Use this template to record test results:
 
 For the MCP server to be considered **fully functional**, it should:
 
-1. **Pass 13 out of 15 tests** (Tests 1-10, 12-15)
-2. **Document Test 11 as a known limitation** (WebXR API tracking)
-3. **Core Features Working:**
+1. **Pass all 15 tests** (Tests 1-15) ✅
+2. **Core Features Working:**
    - ✅ Semantic search with relevance ranking
    - ✅ Relationship-based code navigation
    - ✅ API reference lookups with type filtering
@@ -655,18 +659,23 @@ For the MCP server to be considered **fully functional**, it should:
    - ✅ Reverse dependency tracking
    - ✅ Usage pattern discovery
    - ✅ Pattern detection (ECS Component/System)
+   - ✅ **WebXR API usage tracking (fixed 2025-11-16)**
 
 ---
 
 ## 🐛 Known Issues & Limitations
 
-### Issue #1: WebXR API Usage Tracking
+### ~~Issue #1: WebXR API Usage Tracking~~ **FIXED 2025-11-16** ✅
 - **Test:** Test 11
-- **Status:** Not Working
-- **Description:** The `uses_webxr_api` relationship type does not find XRSession, XRFrame, or XRInputSource usage
-- **Impact:** Cannot track WebXR API usage patterns
-- **Workaround:** Use semantic search with queries like "XRSession" or "XRFrame"
-- **Investigation Needed:** Indexing pipeline may not be capturing WebXR API references
+- **Status:** ~~Not Working~~ **FIXED**
+- **Description:** ~~The `uses_webxr_api` relationship type does not find XRSession, XRFrame, or XRInputSource usage~~ **Now working correctly - 63 chunks tracked**
+- **Fix:** Added `_detect_webxr_patterns()` calls to class and component parsing
+- **Files Changed:**
+  - `ingest/ingestion/parsers/typescript_parser.py` - Added WebXR detection to `_parse_class()` and `_extract_ecs_factory_patterns()`
+  - `ingest/storage/vector_store.py` - Fixed field name from `webxr_api` to `webxr_api_usage`
+
+### No Known Issues
+All 15 tests are now passing. The MCP server is fully functional.
 
 ---
 
@@ -723,6 +732,12 @@ Based on the results, I'll evaluate:
 ---
 
 ## 📝 Version History
+
+- **v1.1** (2025-11-16) - WebXR API tracking fixed
+  - All 15 tests now passing
+  - WebXR API usage detection working (63 chunks tracked)
+  - Source file automation added
+  - Success rate: 15/15 (100%)
 
 - **v1.0** (2025-11-16) - Initial test suite creation
   - 15 comprehensive tests

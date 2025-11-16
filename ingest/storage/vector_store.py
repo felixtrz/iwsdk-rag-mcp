@@ -278,7 +278,7 @@ class VectorStore:
         # Add API usage patterns
         if chunk.webxr_api_usage:
             webxr_list = list(chunk.webxr_api_usage)[:5]
-            metadata["webxr_api"] = ",".join(webxr_list)
+            metadata["webxr_api_usage"] = ",".join(webxr_list)
 
         # Add boolean flags
         metadata["ecs_component"] = chunk.ecs_component
