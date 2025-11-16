@@ -26,6 +26,9 @@ chroma_db/
 *.sqlite
 *.sqlite3
 
+# Temporary cloned repositories
+.temp/
+
 # Embeddings & Data
 mcp/data/chunks.json
 mcp/data/metadata.json

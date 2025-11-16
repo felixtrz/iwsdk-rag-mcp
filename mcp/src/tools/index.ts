@@ -101,6 +101,37 @@ export async function searchCode(
     min_score?: number;
   }
 ): Promise<ToolResult> {
+  // Input validation
+  if (!args.query || args.query.trim().length === 0) {
+    return {
+      content: [{
+        type: 'text',
+        text: 'Error: Query cannot be empty'
+      }],
+      isError: true
+    };
+  }
+
+  if (args.limit !== undefined && (args.limit < 1 || args.limit > 100)) {
+    return {
+      content: [{
+        type: 'text',
+        text: 'Error: Limit must be between 1 and 100'
+      }],
+      isError: true
+    };
+  }
+
+  if (args.min_score !== undefined && (args.min_score < 0 || args.min_score > 1)) {
+    return {
+      content: [{
+        type: 'text',
+        text: 'Error: min_score must be between 0 and 1'
+      }],
+      isError: true
+    };
+  }
+
   try {
     const results = await searchService.search(args.query, {
       limit: args.limit ?? 10,

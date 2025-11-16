@@ -116,6 +116,14 @@ class ASTChunker:
                 consumed.add(i)  # Mark as consumed
                 i += 1
 
+        # Validation: Ensure we didn't skip or duplicate any chunks
+        if len(consumed) != len(chunks):
+            unconsumed = set(range(len(chunks))) - consumed
+            print(f"⚠️  WARNING: Chunker processed {len(consumed)}/{len(chunks)} chunks")
+            print(f"    Unconsumed indices: {sorted(unconsumed)}")
+            for idx in sorted(unconsumed):
+                print(f"    - Index {idx}: {chunks[idx].name} ({chunks[idx].chunk_type})")
+
         return optimized
 
     def _try_merge_small_chunk(self, chunks: List[TypeScriptChunk],

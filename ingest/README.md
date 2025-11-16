@@ -13,43 +13,51 @@ This pipeline:
 
 ## Quick Start
 
-### 1. Setup
+### 1. Setup (One-time)
 
 ```bash
 cd ingest
 ./setup.sh
 ```
 
-This will:
-- Create a Python virtual environment
-- Install all dependencies from `requirements.txt`
+This creates a Python virtual environment and installs dependencies.
 
-### 2. Activate Environment
+### 2. Run Complete Ingestion
+
+From the repository root:
 
 ```bash
+./ingest.sh
+```
+
+This single command:
+- ✅ Clones immersive-web-sdk from GitHub to `.temp/` (gitignored)
+- ✅ Runs `pnpm install` and `npm run build:tgz`
+- ✅ Ingests IWSDK source code (27 components, 17 systems)
+- ✅ Ingests dependencies (Three.js, WebXR types)
+- ✅ Exports to JSON for MCP server
+- ✅ Runs health check validation
+- ✅ Cleans up cloned repo (use `--keep-repo` to inspect)
+
+**No manual paths needed - everything is automated!**
+
+### Advanced Usage
+
+```bash
+# Keep cloned repo for debugging (in .temp/immersive-web-sdk)
+./ingest.sh --keep-repo
+
+# Use the kept repo for faster re-ingestion
+./ingest.sh --repo-path .temp/immersive-web-sdk
+
+# Skip build step (if repo already built)
+./ingest.sh --skip-build --repo-path .temp/immersive-web-sdk
+
+# Run Python script directly
+cd ingest
 source venv/bin/activate
+python scripts/ingest_all.py
 ```
-
-### 3. Ingest IWSDK Code
-
-```bash
-# Clear database and ingest IWSDK
-python scripts/ingest_multi.py \
-  /path/to/immersive-web-sdk \
-  --source iwsdk \
-  --clear
-
-# Add dependencies (Three.js, WebXR type definitions)
-python scripts/ingest_deps.py /path/to/immersive-web-sdk
-```
-
-### 4. Export to JSON
-
-```bash
-python scripts/export_for_npm.py --output ../mcp/data/
-```
-
-This creates `../mcp/data/chunks.json` with all embeddings and metadata for the MCP server.
 
 ## Directory Structure
 
@@ -72,9 +80,11 @@ ingest/
 │   └── vector_store.py  # ChromaDB wrapper
 │
 └── scripts/             # Ingestion scripts
-    ├── ingest_multi.py      # Ingest IWSDK code
-    ├── ingest_deps.py       # Ingest dependencies (Three.js, WebXR)
-    └── export_for_npm.py    # Export to JSON for MCP server
+    ├── ingest_all.py        # Complete ingestion pipeline (NEW!)
+    ├── ingest_multi.py      # Legacy: Manual IWSDK ingestion
+    ├── ingest_deps.py       # Legacy: Manual dependency ingestion
+    ├── export_for_npm.py    # Export to JSON for MCP server
+    └── health_check.py      # Validate system integrity (NEW!)
 ```
 
 ## Supported Sources

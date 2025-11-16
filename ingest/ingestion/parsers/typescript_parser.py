@@ -384,8 +384,10 @@ class TypeScriptParser:
             chunk.ecs_component = True
             chunk.semantic_labels.add('ecs_component')
 
-        # System detection
-        if 'extends system' in content or 'implements isystem' in content:
+        # System detection - check both content patterns and extends metadata
+        if ('extends system' in content or
+            'implements isystem' in content or
+            'createSystem' in chunk.extends):  # Check if extends createSystem()
             chunk.ecs_system = True
             chunk.semantic_labels.add('ecs_system')
 

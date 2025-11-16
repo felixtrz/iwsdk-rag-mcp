@@ -4,29 +4,29 @@ This directory contains pre-processed code chunks and embeddings for the IWSDK R
 
 ## Contents
 
-- `chunks.json` (34.2 MB) - All code chunks with embeddings and metadata
+- `chunks.json` (41.8 MB) - All code chunks with embeddings and metadata
 - `metadata.json` - Summary statistics
 
 ## Data Statistics
 
-- **Total chunks:** 2720
+- **Total chunks:** 3337
 - **Embedding model:** sentence-transformers/all-MiniLM-L6-v2
 - **Embedding dimensions:** 384
-- **Generated:** 2025-11-16T02:45:26.662368Z
+- **Generated:** 2025-11-16T17:39:37.267577Z
 
 ### Sources
 
-- **deps:** 2548 chunks
-- **iwsdk:** 172 chunks
+- **deps:** 3164 chunks
+- **iwsdk:** 173 chunks
 
 ### Chunk Types
 
-- class: 29
+- class: 28
 - function: 25
 - interface: 13
 - interface_group: 10
+- component: 8
 - function_group: 7
-- component: 7
 - type_group: 5
 - type: 4
 

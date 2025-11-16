@@ -50,30 +50,42 @@ See [`mcp/README.md`](mcp/README.md) for details.
 
 ## Quick Start
 
-### 1. Ingest IWSDK Code
+### 1. Setup Python Environment (One-time)
 
 ```bash
 cd ingest
 ./setup.sh
-source venv/bin/activate
-
-# Ingest IWSDK + dependencies
-python scripts/ingest_multi.py /path/to/immersive-web-sdk --source iwsdk --clear
-python scripts/ingest_deps.py /path/to/immersive-web-sdk
-
-# Export for MCP server
-python scripts/export_for_npm.py --output ../mcp/data/
 ```
 
-### 2. Build MCP Server
+### 2. Run Complete Ingestion Pipeline
+
+**One command does everything:**
 
 ```bash
-cd ../mcp
+./ingest.sh
+```
+
+This automatically:
+- ✅ Clones immersive-web-sdk from GitHub to `.temp/` (gitignored)
+- ✅ Installs dependencies (pnpm install)
+- ✅ Builds the SDK (npm run build:tgz)
+- ✅ Ingests IWSDK source code (27 components, 17 systems)
+- ✅ Ingests dependencies (Three.js, WebXR types)
+- ✅ Exports to JSON for MCP server
+- ✅ Validates data integrity
+- ✅ Cleans up cloned repo (use `--keep-repo` to keep it)
+
+No external paths needed - everything is automated!
+
+### 3. Build MCP Server
+
+```bash
+cd mcp
 npm install
 npm run build
 ```
 
-### 3. Configure Claude Desktop
+### 4. Configure Claude Desktop
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -88,7 +100,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-### 4. Use in Claude
+### 5. Use in Claude
 
 Restart Claude Desktop, then ask questions like:
 - "Show me all ECS components in IWSDK"
@@ -185,21 +197,29 @@ See commit history for details.
 
 ### Update IWSDK Index
 
-When the IWSDK codebase changes:
+When the IWSDK codebase changes (or to get latest from GitHub):
 
 ```bash
-# 1. Re-ingest
-cd ingest
-source venv/bin/activate
-python scripts/ingest_multi.py /path/to/immersive-web-sdk --source iwsdk --clear
-python scripts/ingest_deps.py /path/to/immersive-web-sdk
-python scripts/export_for_npm.py --output ../mcp/data/
+# 1. Re-ingest (automatically pulls latest from GitHub)
+./ingest.sh
 
 # 2. Rebuild MCP server
-cd ../mcp
-npm run build
+cd mcp && npm run build
 
 # 3. Restart Claude Desktop
+```
+
+**Advanced options:**
+
+```bash
+# Keep cloned repo for inspection (in .temp/immersive-web-sdk)
+./ingest.sh --keep-repo
+
+# Use existing local repo
+./ingest.sh --repo-path .temp/immersive-web-sdk
+
+# Skip build (if repo already built)
+./ingest.sh --skip-build --repo-path .temp/immersive-web-sdk
 ```
 
 ### Modify Tools

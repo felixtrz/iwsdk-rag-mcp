@@ -89,6 +89,51 @@ def export_to_json(output_dir: str, limit: int = None):
         print(f"  {source}: {count} chunks")
     print()
 
+    # Validate data before export
+    print("🔍 Validating data integrity...")
+
+    # Check for IWSDK components and systems
+    if 'iwsdk' in sources:
+        components_count = sum(1 for m in all_data['metadatas']
+                              if m.get('source') == 'iwsdk' and m.get('ecs_component'))
+        systems_count = sum(1 for m in all_data['metadatas']
+                           if m.get('source') == 'iwsdk' and m.get('ecs_system'))
+
+        EXPECTED_COMPONENTS = 27
+        EXPECTED_SYSTEMS = 17
+
+        print(f"  ECS Components: {components_count} (expected: {EXPECTED_COMPONENTS})")
+        print(f"  ECS Systems: {systems_count} (expected: {EXPECTED_SYSTEMS})")
+
+        if components_count != EXPECTED_COMPONENTS:
+            print(f"  ⚠️  WARNING: Component count mismatch!")
+        else:
+            print(f"  ✅ Component count correct")
+
+        if systems_count != EXPECTED_SYSTEMS:
+            print(f"  ⚠️  WARNING: System count mismatch!")
+        else:
+            print(f"  ✅ System count correct")
+
+    # Validate embeddings
+    null_embeddings = sum(1 for e in all_data['embeddings'] if e is None or len(e) == 0)
+    if null_embeddings > 0:
+        print(f"  ⚠️  WARNING: Found {null_embeddings} chunks with null/empty embeddings!")
+    else:
+        print(f"  ✅ All chunks have valid embeddings")
+
+    # Check embedding dimensions
+    if len(all_data['embeddings']) > 0:
+        first_embedding = all_data['embeddings'][0]
+        if first_embedding is not None and len(first_embedding) > 0:
+            first_dim = len(first_embedding)
+            if first_dim == 384:
+                print(f"  ✅ Embedding dimensions correct (384)")
+            else:
+                print(f"  ⚠️  WARNING: Unexpected embedding dimension: {first_dim}")
+
+    print()
+
     # Prepare export data
     print("🔧 Preparing export data...")
 
