@@ -1,0 +1,48 @@
+# Python
+ingest/venv/
+ingest/__pycache__/
+ingest/**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Node.js
+mcp/node_modules/
+mcp/dist/
+mcp/src/**/*.js
+mcp/package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vector Database
+chroma_db/
+*.db
+*.sqlite
+*.sqlite3
+
+# Embeddings & Data
+mcp/data/chunks.json
+mcp/data/metadata.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
