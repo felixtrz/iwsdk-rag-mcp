@@ -2,9 +2,6 @@
 
 TypeScript-based Model Context Protocol (MCP) server that provides semantic code search across the Immersive Web SDK using RAG (Retrieval-Augmented Generation) with vector embeddings.
 
-[![npm version](https://badge.fury.io/js/@felixtz%2Fiwsdk-rag-mcp.svg)](https://www.npmjs.com/package/@felixtz/iwsdk-rag-mcp)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 ## Overview
 
 This MCP server exposes 8 specialized tools for AI assistants to search and understand IWSDK code:
@@ -119,17 +116,20 @@ Once installed, try asking Claude:
 ## Features
 
 ### Semantic Search
+
 - **768-dimensional embeddings** using all-mpnet-base-v2
 - **Offline search** - no external API calls required
 - **Fast results** - all data loaded in memory
 
 ### Smart Pattern Detection
+
 - **ECS Components**: Automatically detected via `createComponent()` pattern (27 found)
 - **ECS Systems**: Detected via `extends createSystem()` pattern (17 found)
 - **WebXR API Usage**: Tracks XRSession, XRFrame, XRInputSource usage (63 chunks)
 - **Relationship Tracking**: extends, implements, imports, calls
 
 ### Complete Coverage
+
 - IWSDK core packages (core, xr-input, locomotor, glxf)
 - Three.js type definitions
 - WebXR API types
@@ -216,7 +216,7 @@ This will run the Python ingestion pipeline to regenerate the vector database.
 
 ## License
 
-MIT License - Copyright (c) 2022 - present EliXR Games
+MIT License - Copyright (c) 2025 Felix Zhang
 
 ## Links
 
