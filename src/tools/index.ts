@@ -7,9 +7,9 @@
  * 3. get_api_reference - Quick API lookups by name
  */
 
-import type { SearchService } from '../search.js';
-import type { Chunk, SearchResult } from '../types.js';
 import { FileService } from '../files.js';
+import type { SearchService } from '../search.js';
+import type { Chunk } from '../types.js';
 
 export interface ToolResult {
   content: Array<{ type: 'text'; text: string }>;
@@ -21,9 +21,9 @@ export interface ToolResult {
  * IMPORTANT: Handles both arrays and single strings (not splitting strings into chars!)
  */
 function toArray(value: any): string[] {
-  if (!value) return [];
-  if (Array.isArray(value)) return value;
-  if (typeof value === 'string') return [value];  // Return as single-element array
+  if (!value) {return [];}
+  if (Array.isArray(value)) {return value;}
+  if (typeof value === 'string') {return [value];}  // Return as single-element array
   return [];
 }
 
@@ -380,7 +380,7 @@ export async function listEcsComponents(
     // Filter for ECS components using pattern detection
     // Check metadata flag OR extends Component
     let components = allChunks.filter(chunk => {
-      if (chunk.metadata.ecs_component) return true;
+      if (chunk.metadata.ecs_component) {return true;}
 
       // Pattern detection: extends Component
       const extendsArr = toArray(chunk.metadata.extends);
@@ -463,7 +463,7 @@ export async function listEcsSystems(
     // Filter for ECS systems using pattern detection
     // Check metadata flag OR extends System
     let systems = allChunks.filter(chunk => {
-      if (chunk.metadata.ecs_system) return true;
+      if (chunk.metadata.ecs_system) {return true;}
 
       // Pattern detection: extends System
       const extendsArr = toArray(chunk.metadata.extends);
@@ -679,11 +679,11 @@ export async function findUsageExamples(
       // - Mentioned in code = +2
       // - Not a type definition = +3
 
-      if (importsApi && callsApi) score += 10;
-      else if (importsApi && (extendsApi || implementsApi)) score += 8;
-      else if (importsApi) score += 3;
+      if (importsApi && callsApi) {score += 10;}
+      else if (importsApi && (extendsApi || implementsApi)) {score += 8;}
+      else if (importsApi) {score += 3;}
 
-      if (mentionedInCode) score += 2;
+      if (mentionedInCode) {score += 2;}
 
       // Prefer actual code over type definitions
       if (chunk.metadata.chunk_type === 'class' || chunk.metadata.chunk_type === 'function') {

@@ -21,6 +21,7 @@ Usage:
 import sys
 import subprocess
 import shutil
+import json
 from pathlib import Path
 from typing import Optional, List
 from tqdm import tqdm
@@ -63,6 +64,46 @@ def run_command(cmd: List[str], cwd: Optional[Path] = None, description: str = "
         print(f"  ❌ Command failed: {' '.join(cmd)}")
         print(f"  Error: {e.stderr}")
         return False
+
+
+def get_iwsdk_version(iwsdk_dir: Path) -> Optional[str]:
+    """Extract IWSDK version from packages/core/package.json."""
+    try:
+        core_pkg_json = iwsdk_dir / "packages" / "core" / "package.json"
+        if core_pkg_json.exists():
+            with open(core_pkg_json) as f:
+                data = json.load(f)
+                return data.get("version")
+    except Exception as e:
+        print(f"  ⚠️  Failed to read core package version: {e}")
+
+    return None
+
+
+def update_parent_package_version(iwsdk_version: str):
+    """Update the parent project's package.json with IWSDK version."""
+    # Go from scripts/ingest/scripts -> scripts/ingest -> scripts -> root
+    repo_root = Path(__file__).parent.parent.parent.parent
+    package_json_path = repo_root / "package.json"
+
+    if not package_json_path.exists():
+        print("  ⚠️  Parent package.json not found")
+        return
+
+    try:
+        with open(package_json_path, 'r') as f:
+            package_data = json.load(f)
+
+        old_version = package_data.get('version', 'unknown')
+        package_data['version'] = iwsdk_version
+
+        with open(package_json_path, 'w') as f:
+            json.dump(package_data, f, indent=2)
+            f.write('\n')  # Add trailing newline
+
+        print(f"  ✅ Updated package.json version: {old_version} → {iwsdk_version}")
+    except Exception as e:
+        print(f"  ⚠️  Failed to update package.json: {e}")
 
 
 def clone_and_build_iwsdk(temp_dir: Path, skip_build: bool = False) -> Optional[Path]:
@@ -237,7 +278,7 @@ def ingest_iwsdk_source(iwsdk_dir: Path) -> int:
     components = sum(1 for c in all_chunks if c.ecs_component)
     systems = sum(1 for c in all_chunks if c.ecs_system)
 
-    EXPECTED_COMPONENTS = 27
+    EXPECTED_COMPONENTS = 28  # Updated - IWSDK codebase has grown
     EXPECTED_SYSTEMS = 17
 
     print(f"  ECS Components: {components} (expected: {EXPECTED_COMPONENTS})")
@@ -376,7 +417,7 @@ def ingest_dependencies(iwsdk_dir: Path) -> int:
     return len(all_chunks)
 
 
-def export_to_json():
+def export_to_json(iwsdk_version: str = None):
     """Export vector store to JSON for MCP server."""
     print("=" * 80)
     print("📤 EXPORTING TO JSON")
@@ -386,8 +427,9 @@ def export_to_json():
     # Import and run export
     from export_for_npm import export_to_json as export_fn
 
-    output_path = Path(__file__).parent.parent.parent / "mcp" / "data"
-    export_fn(str(output_path))
+    # Go from scripts/ingest/scripts -> scripts/ingest -> scripts -> root -> data
+    output_path = Path(__file__).parent.parent.parent.parent / "data"
+    export_fn(str(output_path), iwsdk_version=iwsdk_version)
 
 
 def run_health_check() -> bool:
@@ -406,15 +448,16 @@ def run_health_check() -> bool:
 
 
 def copy_source_files(iwsdk_dir: Path):
-    """Copy source files to mcp/data/sources for reference."""
+    """Copy source files to data/sources/ for reference."""
     print("=" * 80)
     print("📋 COPYING SOURCE FILES")
     print("=" * 80)
     print()
 
-    # Get repo root and MCP sources directory
-    repo_root = Path(__file__).parent.parent.parent
-    sources_dir = repo_root / "mcp" / "data" / "sources"
+    # Get repo root and sources directory
+    # Go from scripts/ingest/scripts -> scripts/ingest -> scripts -> root
+    repo_root = Path(__file__).parent.parent.parent.parent
+    sources_dir = repo_root / "data" / "sources"
 
     print(f"📁 Source directory: {sources_dir}")
     print()
@@ -568,8 +611,9 @@ def main():
         print()
     else:
         # Use local .temp directory instead of system temp
-        repo_root = Path(__file__).parent.parent.parent
-        temp_dir = repo_root / ".temp"
+        # Go from scripts/ingest/scripts -> scripts/ingest -> scripts -> root
+        repo_root = Path(__file__).parent.parent.parent.parent
+        temp_dir = repo_root / "scripts" / ".temp"
         temp_dir.mkdir(exist_ok=True)
         print(f"📁 Temp directory: {temp_dir}")
         print()
@@ -581,6 +625,20 @@ def main():
             sys.exit(1)
 
     try:
+        # Extract and sync IWSDK version
+        print("=" * 80)
+        print("🔖 SYNCING IWSDK VERSION")
+        print("=" * 80)
+        print()
+
+        iwsdk_version = get_iwsdk_version(iwsdk_dir)
+        if iwsdk_version:
+            print(f"📦 IWSDK version: {iwsdk_version}")
+            update_parent_package_version(iwsdk_version)
+        else:
+            print("  ⚠️  Could not determine IWSDK version")
+        print()
+
         # Ingest source code
         iwsdk_chunks = ingest_iwsdk_source(iwsdk_dir)
 
@@ -588,7 +646,7 @@ def main():
         deps_chunks = ingest_dependencies(iwsdk_dir)
 
         # Export to JSON
-        export_to_json()
+        export_to_json(iwsdk_version=iwsdk_version)
 
         # Copy source files for reference
         copy_source_files(iwsdk_dir)
@@ -611,9 +669,8 @@ def main():
             print("✅ All health checks passed!")
             print()
             print("Next steps:")
-            print("  1. cd ../mcp")
-            print("  2. npm run build")
-            print("  3. Restart Claude Desktop")
+            print("  1. npm run build")
+            print("  2. Restart Claude Desktop/Code")
         else:
             print("⚠️  Some health checks failed - review output above")
             sys.exit(1)

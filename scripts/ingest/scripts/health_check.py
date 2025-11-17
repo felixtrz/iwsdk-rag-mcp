@@ -61,7 +61,7 @@ def check_vector_store():
         systems = sum(1 for m in all_data['metadatas']
                      if m.get('source') == 'iwsdk' and m.get('ecs_system'))
 
-        EXPECTED_COMPONENTS = 27
+        EXPECTED_COMPONENTS = 28  # Updated - IWSDK codebase has grown
         EXPECTED_SYSTEMS = 17
 
         print(f"  Components: {components} (expected: {EXPECTED_COMPONENTS})")
@@ -93,11 +93,12 @@ def check_export_data():
     print("📦 Checking MCP Export Data:")
     print()
 
-    export_path = Path(__file__).parent.parent.parent / "mcp" / "data" / "chunks.json"
+    # Go from scripts/ingest/scripts -> scripts/ingest -> scripts -> root -> data
+    export_path = Path(__file__).parent.parent.parent.parent / "data" / "chunks.json"
 
     if not export_path.exists():
         print(f"  ⚠️  Export file not found: {export_path}")
-        print(f"     Run: python scripts/export_for_npm.py --output ../mcp/data/")
+        print(f"     Run: npm run ingest")
         return False
 
     print(f"  ✅ Found: {export_path}")
@@ -114,8 +115,8 @@ def check_export_data():
     # Validate embedding dimensions
     if data['chunks']:
         first_embedding = data['chunks'][0].get('embedding', [])
-        if len(first_embedding) == 384:
-            print(f"  ✅ Embedding dimensions correct (384)")
+        if len(first_embedding) == 768:
+            print(f"  ✅ Embedding dimensions correct (768)")
         else:
             print(f"  ❌ FAIL: Wrong embedding dimension: {len(first_embedding)}")
 
@@ -128,7 +129,7 @@ def check_export_data():
         print(f"  IWSDK Components in export: {components}")
         print(f"  IWSDK Systems in export: {systems}")
 
-        EXPECTED_COMPONENTS = 27
+        EXPECTED_COMPONENTS = 28  # Updated - IWSDK codebase has grown
         EXPECTED_SYSTEMS = 17
 
         if components == EXPECTED_COMPONENTS and systems == EXPECTED_SYSTEMS:

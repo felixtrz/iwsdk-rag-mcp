@@ -7,7 +7,7 @@ Python-based ingestion pipeline for parsing, chunking, and embedding TypeScript 
 This pipeline:
 1. **Parses** TypeScript files using tree-sitter to extract semantic code chunks (classes, functions, components, systems, etc.)
 2. **Chunks** the code intelligently using AST-aware strategies
-3. **Embeds** code chunks using sentence-transformers (all-MiniLM-L6-v2)
+3. **Embeds** code chunks using sentence-transformers (all-mpnet-base-v2)
 4. **Stores** embeddings in ChromaDB vector database
 5. **Exports** the database to JSON format for the MCP server
 
@@ -36,7 +36,7 @@ This single command:
 - ✅ Ingests IWSDK source code (28 components, 17 systems)
 - ✅ Ingests dependencies (Three.js, WebXR types, elics)
 - ✅ Exports to JSON for MCP server
-- ✅ Copies source files to `mcp/data/sources/` for reference
+- ✅ Copies source files to `data/sources/` for reference
 - ✅ Runs health check validation (validates 3337 chunks, 63 WebXR API usages)
 - ✅ Cleans up cloned repo (use `--keep-repo` to inspect)
 
@@ -134,10 +134,10 @@ The AST-aware chunker:
 
 ## Embedding Model
 
-**Model**: `sentence-transformers/all-MiniLM-L6-v2`
-- **Dimensions**: 384
-- **Fast** inference on CPU
-- **Good** semantic understanding for code
+**Model**: `sentence-transformers/all-mpnet-base-v2`
+- **Dimensions**: 768
+- **High Quality**: Better semantic understanding than MiniLM
+- **CPU Inference**: Works on CPU without external APIs
 
 ## Vector Database
 
@@ -162,7 +162,7 @@ python scripts/ingest_multi.py /path/to/immersive-web-sdk --source iwsdk --clear
 python scripts/ingest_deps.py /path/to/immersive-web-sdk
 
 # 3. Export for MCP server
-python scripts/export_for_npm.py --output ../mcp/data/
+python scripts/export_for_npm.py --output /path/to/iwsdk-rag/data/
 ```
 
 ### Update IWSDK Only
@@ -177,7 +177,7 @@ python scripts/ingest_multi.py /path/to/immersive-web-sdk --source iwsdk --clear
 python scripts/ingest_deps.py /path/to/immersive-web-sdk
 
 # Export
-python scripts/export_for_npm.py --output ../mcp/data/
+python scripts/export_for_npm.py --output /path/to/iwsdk-rag/data/
 ```
 
 ## Troubleshooting
@@ -224,8 +224,8 @@ The exported JSON (`chunks.json`) contains:
 ```json
 {
   "version": "1.0.0",
-  "model": "sentence-transformers/all-MiniLM-L6-v2",
-  "embedding_dim": 384,
+  "model": "sentence-transformers/all-mpnet-base-v2",
+  "embedding_dim": 768,
   "total_chunks": 2720,
   "chunks": [
     {
@@ -240,7 +240,7 @@ The exported JSON (`chunks.json`) contains:
         "extends": "Component",
         ...
       },
-      "embedding": [0.123, -0.456, ...]  // 384-dim vector
+      "embedding": [0.123, -0.456, ...]  // 768-dim vector
     }
   ]
 }

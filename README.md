@@ -1,286 +1,233 @@
-# IWSDK RAG - Retrieval-Augmented Generation for Immersive Web SDK
+# IWSDK RAG MCP Server
 
-Semantic code search system for the Immersive Web SDK, powered by vector embeddings and accessible via Model Context Protocol (MCP).
+TypeScript-based Model Context Protocol (MCP) server that provides semantic code search across the Immersive Web SDK using RAG (Retrieval-Augmented Generation) with vector embeddings.
+
+[![npm version](https://badge.fury.io/js/@felixtz%2Fiwsdk-rag-mcp.svg)](https://www.npmjs.com/package/@felixtz/iwsdk-rag-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Overview
 
-This project provides AI assistants (like Claude) with deep understanding of the Immersive Web SDK codebase through:
-- **Semantic code search** - Find code by meaning, not just keywords
-- **Relationship queries** - Discover inheritance, imports, and usage patterns
-- **ECS-aware tools** - List components and systems with smart pattern detection
-- **Real-world examples** - Find actual usage of APIs in the codebase
+This MCP server exposes 8 specialized tools for AI assistants to search and understand IWSDK code:
 
-## Architecture
+1. **`search_code`** - Semantic search across all code
+2. **`find_by_relationship`** - Find code by relationships (extends, implements, imports, calls)
+3. **`get_api_reference`** - Look up specific APIs by name
+4. **`get_file_content`** - Retrieve complete file contents
+5. **`list_ecs_components`** - List all ECS components (27 components)
+6. **`list_ecs_systems`** - List all ECS systems (17 systems)
+7. **`find_dependents`** - Find code that depends on an API
+8. **`find_usage_examples`** - Find real-world usage examples
 
-```
-iwsdk-rag/
-├── ingest/          # Python pipeline: parse → chunk → embed → store
-├── mcp/             # TypeScript MCP server: search tools for AI
-└── chroma_db/       # Vector database (ChromaDB)
-```
+### What's Indexed
 
-### Ingest Pipeline (Python)
+- **173 IWSDK chunks** (27 ECS components, 17 systems)
+- **3,164 dependency chunks** (Three.js, WebXR types)
+- **3,337 total searchable chunks** with 768-dimensional embeddings
+- **Embedding model**: sentence-transformers/all-mpnet-base-v2
 
-Processes TypeScript code into searchable embeddings:
-1. **Parse** - Extract semantic chunks using tree-sitter (classes, functions, components, etc.)
-2. **Chunk** - Intelligently split code using AST-aware strategies
-3. **Embed** - Generate 384-dim vectors using sentence-transformers
-4. **Store** - Save to ChromaDB with rich metadata
-5. **Export** - Create JSON for MCP server
+## Installation
 
-**Technology**: Python, tree-sitter, sentence-transformers, ChromaDB
-
-See [`ingest/README.md`](ingest/README.md) for details.
-
-### MCP Server (TypeScript)
-
-Provides 8 search tools for AI assistants:
-- `search_code` - Semantic search
-- `list_ecs_components` - Find all ECS components (27 detected)
-- `list_ecs_systems` - Find all ECS systems (17 detected)
-- `get_api_reference` - Look up API definitions
-- `find_by_relationship` - Query by extends/implements/imports/calls
-- `find_usage_examples` - Find real-world usage
-- `find_dependents` - Find code that depends on an API
-- `get_file_content` - Retrieve full files
-
-**Technology**: TypeScript, Model Context Protocol, transformers.js
-
-See [`mcp/README.md`](mcp/README.md) for details.
-
-## Quick Start
-
-### 1. Setup Python Environment (One-time)
+### Method 1: Install from npm/pnpm (Recommended)
 
 ```bash
-cd ingest
-./setup.sh
+# Using pnpm (recommended, matches IWSDK)
+pnpm add -g @felixtz/iwsdk-rag-mcp
+
+# Or using npm
+npm install -g @felixtz/iwsdk-rag-mcp
 ```
 
-### 2. Run Complete Ingestion Pipeline
-
-**One command does everything:**
+Then add to Claude Code using the CLI (recommended):
 
 ```bash
-./ingest.sh
+# For user-level (available across all projects)
+claude mcp add --transport stdio iwsdk-rag --scope user -- iwsdk-rag-mcp
+
+# For project-level only
+claude mcp add --transport stdio iwsdk-rag --scope local -- iwsdk-rag-mcp
 ```
 
-This automatically:
-- ✅ Clones immersive-web-sdk from GitHub to `.temp/` (gitignored)
-- ✅ Installs dependencies (pnpm install)
-- ✅ Builds the SDK (npm run build:tgz)
-- ✅ Ingests IWSDK source code (27 components, 17 systems)
-- ✅ Ingests dependencies (Three.js, WebXR types)
-- ✅ Exports to JSON for MCP server
-- ✅ Copies source files to `mcp/data/sources/` for reference
-- ✅ Validates data integrity
-- ✅ Cleans up cloned repo (use `--keep-repo` to keep it)
+Restart Claude Code, and the tools will be available!
 
-No external paths needed - everything is automated!
-
-### 3. Build MCP Server
+### Method 2: Use with npx (No Installation)
 
 ```bash
-cd mcp
-npm install
-npm run build
+# For user-level (available across all projects)
+claude mcp add --transport stdio iwsdk-rag --scope user -- npx -y @felixtz/iwsdk-rag-mcp
 ```
 
-### 4. Configure Claude Desktop
+### Method 3: Run from Source
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+```bash
+# Clone and build
+git clone https://github.com/felixtrz/iwsdk-rag-mcp.git
+cd iwsdk-rag-mcp
+pnpm install
+pnpm run build
+
+# Add to Claude Code
+claude mcp add --transport stdio iwsdk-rag --scope user -- node /absolute/path/to/iwsdk-rag-mcp/dist/index.js
+```
+
+### For Claude Desktop
+
+**Configuration file**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "iwsdk-rag": {
-      "command": "node",
-      "args": ["/absolute/path/to/iwsdk-rag/mcp/dist/index.js"]
+      "command": "iwsdk-rag-mcp"
     }
   }
 }
 ```
 
-### 5. Use in Claude
+Or with npx:
 
-Restart Claude Desktop, then ask questions like:
-- "Show me all ECS components in IWSDK"
-- "Find examples of using AudioSource"
+```json
+{
+  "mcpServers": {
+    "iwsdk-rag": {
+      "command": "npx",
+      "args": ["-y", "@felixtz/iwsdk-rag-mcp"]
+    }
+  }
+}
+```
+
+### Verify Installation
+
+```bash
+# List configured MCP servers
+claude mcp list
+
+# Should show:
+# iwsdk-rag: iwsdk-rag-mcp - ✓ Connected
+```
+
+## Usage Examples
+
+Once installed, try asking Claude:
+
+- "List all ECS components in IWSDK"
+- "Show me how to use AudioSource"
+- "Find examples of hand tracking in the codebase"
 - "What classes extend Component?"
-- "How does hand tracking work?"
-
-## What Gets Indexed
-
-### IWSDK (172 chunks)
-- **27 ECS Components**: AudioSource, Transform, Handle, LocomotionEnvironment, etc.
-- **17 ECS Systems**: AudioSystem, TransformSystem, GrabSystem, VisibilitySystem, etc.
-- **Classes, Functions, Interfaces**: All semantic code structures
-- **Metadata**: Relationships, imports, calls, API usage
-
-### Dependencies (2548 chunks)
-- **Three.js types**: Complete type definitions
-- **WebXR types**: Full WebXR API types
-
-**Total**: 2720 searchable code chunks with embeddings
+- "Show me the TransformSystem implementation"
 
 ## Features
 
+### Semantic Search
+- **768-dimensional embeddings** using all-mpnet-base-v2
+- **Offline search** - no external API calls required
+- **Fast results** - all data loaded in memory
+
 ### Smart Pattern Detection
+- **ECS Components**: Automatically detected via `createComponent()` pattern (27 found)
+- **ECS Systems**: Detected via `extends createSystem()` pattern (17 found)
+- **WebXR API Usage**: Tracks XRSession, XRFrame, XRInputSource usage (63 chunks)
+- **Relationship Tracking**: extends, implements, imports, calls
 
-- **ECS Components**: Detects `createComponent()` factory pattern (28 found)
-- **ECS Systems**: Detects `extends createSystem()` pattern (17 found)
-- **Relationships**: Tracks extends, implements, imports, calls
-- **WebXR API Usage**: Tracks 63 chunks using XRSession, XRFrame, XRInputSource, etc.
-- **Three.js Detection**: Identifies Three.js API usage patterns
-
-### AST-Aware Chunking
-
-- Preserves semantic boundaries (complete functions, classes)
-- Merges related small chunks (getters/setters)
-- Prevents duplicates and skipped chunks
-- Maintains ECS metadata through merging
-
-### High-Quality Embeddings
-
-- **Model**: sentence-transformers/all-MiniLM-L6-v2
-- **Dimensions**: 384
-- **Fast**: CPU inference, no external APIs
-- **Accurate**: Semantic code understanding
+### Complete Coverage
+- IWSDK core packages (core, xr-input, locomotor, glxf)
+- Three.js type definitions
+- WebXR API types
+- Full file content retrieval
 
 ## Repository Structure
 
 ```
 iwsdk-rag/
-│
-├── ingest/                      # Python ingestion pipeline
-│   ├── README.md               # Ingestion documentation
-│   ├── requirements.txt        # Python dependencies
-│   ├── setup.sh               # Environment setup
-│   ├── venv/                  # Python virtual environment
-│   ├── ingestion/             # Core ingestion code
-│   │   ├── parsers/          # Tree-sitter parsers
-│   │   ├── chunkers/         # AST-aware chunking
-│   │   └── embedders/        # Embedding models
-│   ├── storage/              # ChromaDB wrapper
-│   └── scripts/              # Ingestion scripts
-│       ├── ingest_all.py        # Complete pipeline
-│       ├── export_for_npm.py    # Export to JSON
-│       └── health_check.py      # Validation
-│
-├── mcp/                         # TypeScript MCP server
-│   ├── README.md               # MCP server documentation
-│   ├── package.json            # Node dependencies
-│   ├── tsconfig.json           # TypeScript config
-│   ├── src/                   # TypeScript source
-│   │   ├── index.ts          # MCP server entry
-│   │   ├── search.ts         # Vector search
-│   │   ├── embeddings.ts     # Query embeddings
-│   │   └── tools/            # 8 MCP tools
-│   ├── dist/                 # Compiled JavaScript
-│   └── data/                 # Vector database (JSON)
-│       └── chunks.json       # All embeddings (33MB)
-│
-├── chroma_db/                   # ChromaDB vector database
-├── .gitignore                   # Git ignore rules
-└── README.md                    # This file
+├── src/                   # TypeScript source code
+│   ├── index.ts          # MCP server entry point
+│   ├── search.ts         # Vector search service
+│   ├── embeddings.ts     # Query embedding & similarity
+│   ├── files.ts          # File content retrieval
+│   └── tools/            # 8 MCP tool implementations
+├── dist/                  # Compiled JavaScript
+├── data/                  # Vector database
+│   ├── chunks.json       # Pre-computed embeddings (83MB)
+│   ├── metadata.json     # Database metadata
+│   └── sources/          # Source files for get_file_content
+├── scripts/               # Development tools
+│   └── ingest/           # Python ingestion pipeline
+├── package.json           # Package configuration
+├── pnpm-lock.yaml         # pnpm lockfile
+├── tsconfig.json          # TypeScript configuration
+└── README.md              # This file
 ```
 
-## Recent Improvements
+## Development
 
-### WebXR API Detection (2025-11-16)
-- **Issue**: WebXR API usage (XRSession, XRFrame, etc.) was not being detected
-- **Fix**: Added `_detect_webxr_patterns()` calls to class and component parsing
-- **Result**: 63 chunks now properly tracked for WebXR API usage
-- **Files**: `ingest/ingestion/parsers/typescript_parser.py`, `ingest/storage/vector_store.py`
-
-### Source File Automation (2025-11-16)
-- **Issue**: `mcp/data/sources/` was manually maintained
-- **Fix**: Automated copying of source files during ingestion
-- **Result**: IWSDK packages, Three.js types, WebXR types, and elics are automatically copied
-- **Files**: `ingest/scripts/ingest_all.py`
-
-### Earlier Bug Fixes
-1. **Parser Bug**: Added detection for `createComponent()` factory pattern
-2. **Chunker Metadata Bug**: Preserve ECS flags during chunk merging/expansion
-3. **Chunker Skip Bug**: Track consumed indices to prevent skipped/duplicated chunks
-
-## Development Workflow
-
-### Update IWSDK Index
-
-When the IWSDK codebase changes (or to get latest from GitHub):
+### Building from Source
 
 ```bash
-# 1. Re-ingest (automatically pulls latest from GitHub)
+git clone https://github.com/felixtrz/iwsdk-rag-mcp.git
+cd iwsdk-rag-mcp
+pnpm install
+pnpm run build
+```
+
+### Regenerating the Index
+
+If you need to re-ingest the IWSDK codebase (e.g., after SDK updates):
+
+```bash
+cd scripts
 ./ingest.sh
-
-# 2. Rebuild MCP server
-cd mcp && npm run build
-
-# 3. Restart Claude Desktop
 ```
 
-**Advanced options:**
+This will run the Python ingestion pipeline to regenerate the vector database.
 
-```bash
-# Keep cloned repo for inspection (in .temp/immersive-web-sdk)
-./ingest.sh --keep-repo
+## How It Works
 
-# Use existing local repo
-./ingest.sh --repo-path .temp/immersive-web-sdk
+### Architecture
 
-# Skip build (if repo already built)
-./ingest.sh --skip-build --repo-path .temp/immersive-web-sdk
-```
+1. **Ingestion (Python)**: Parses TypeScript code using tree-sitter, chunks semantically, generates embeddings
+2. **Storage**: Pre-computed embeddings stored in JSON (~83MB)
+3. **MCP Server (TypeScript)**: Loads embeddings at startup, performs semantic search using transformers.js
+4. **AI Assistant**: Uses MCP tools to search and understand the codebase
 
-### Modify Tools
+### Vector Search Flow
 
-```bash
-cd mcp
-# Edit src/tools/index.ts
-npm run build
-# Restart Claude Desktop
-```
+1. User query → Embedded using all-mpnet-base-v2
+2. Cosine similarity computed against all code chunk embeddings
+3. Results ranked by similarity score
+4. Optional filtering by source, type, relationships
 
-### Debug Ingestion
+## Troubleshooting
 
-```bash
-cd ingest
-source venv/bin/activate
+### Tools not showing up
 
-# Test parser on a single file
-python -c "
-from ingestion.parsers.typescript_parser import TypeScriptParser
-parser = TypeScriptParser()
-chunks = parser.parse_file('/path/to/file.ts')
-for c in chunks:
-    print(f'{c.chunk_type}: {c.name}')
-"
-```
+1. Check config file location and syntax
+2. Verify package is installed: `pnpm list -g @felixtz/iwsdk-rag-mcp` or `npm list -g @felixtz/iwsdk-rag-mcp`
+3. Restart Claude Desktop/Code completely
 
-## Requirements
+### Slow first load
 
-### Python (Ingestion)
-- Python 3.8+
-- pip packages in `ingest/requirements.txt`
+- The embedding model (~420MB) downloads on first run
+- Subsequent runs are faster (model is cached)
 
-### Node.js (MCP Server)
-- Node.js 18+
-- npm packages in `mcp/package.json`
+### High memory usage
 
-### Claude Desktop
-- Latest version with MCP support
+- Normal - the server loads 83MB of embeddings into memory for fast search
+- Minimum recommended RAM: 2GB available
 
 ## License
 
-MIT
+MIT License - Copyright (c) 2022 - present EliXR Games
 
-## Contributing
+## Links
 
-This is a research/development project. Contributions welcome!
+- **npm Package**: https://www.npmjs.com/package/@felixtz/iwsdk-rag-mcp
+- **GitHub**: https://github.com/felixtrz/iwsdk-rag-mcp
+- **Issues**: https://github.com/felixtrz/iwsdk-rag-mcp/issues
+- **Author**: Felix Zhang (https://github.com/felixtrz)
+- **Sponsor**: https://github.com/sponsors/felixtrz
 
-Key areas for improvement:
-- Add more code sources (examples, tests)
-- Improve chunking strategies
-- Add more relationship types
-- Optimize search performance
+## Credits
+
+- **Immersive Web SDK**: https://github.com/facebook/immersive-web-sdk
+- **Model Context Protocol**: https://modelcontextprotocol.io
+- **Embeddings**: sentence-transformers/all-mpnet-base-v2

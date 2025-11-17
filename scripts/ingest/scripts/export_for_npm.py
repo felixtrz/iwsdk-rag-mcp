@@ -6,11 +6,13 @@ This script exports the ingested code chunks, embeddings, and metadata
 into a JSON file that can be included in an npm package.
 
 The TypeScript MCP server will load this JSON and perform vector search
-using the same all-MiniLM-L6-v2 model via transformers.js.
+using the same all-mpnet-base-v2 model via transformers.js.
 
 Usage:
-    python scripts/export_for_npm.py --output ../iwsdk-rag-mcp/data/
+    python scripts/export_for_npm.py --output /path/to/iwsdk-rag/data/
     python scripts/export_for_npm.py --output ./export/ --limit 100  # For testing
+
+    Typically called automatically by npm run ingest
 """
 
 import sys
@@ -25,13 +27,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from storage.vector_store import VectorStore
 
 
-def export_to_json(output_dir: str, limit: int = None):
+def export_to_json(output_dir: str, limit: int = None, iwsdk_version: str = None):
     """
     Export ChromaDB data to JSON format for npm distribution.
 
     Args:
         output_dir: Directory to write JSON files
         limit: Optional limit on number of chunks (for testing)
+        iwsdk_version: Optional IWSDK version to include in metadata
     """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -127,8 +130,8 @@ def export_to_json(output_dir: str, limit: int = None):
         first_embedding = all_data['embeddings'][0]
         if first_embedding is not None and len(first_embedding) > 0:
             first_dim = len(first_embedding)
-            if first_dim == 384:
-                print(f"  ✅ Embedding dimensions correct (384)")
+            if first_dim == 768:
+                print(f"  ✅ Embedding dimensions correct (768)")
             else:
                 print(f"  ⚠️  WARNING: Unexpected embedding dimension: {first_dim}")
 
@@ -139,8 +142,9 @@ def export_to_json(output_dir: str, limit: int = None):
 
     export_data = {
         "version": "1.0.0",
-        "model": "sentence-transformers/all-MiniLM-L6-v2",
-        "embedding_dim": 384,
+        "iwsdk_version": iwsdk_version if iwsdk_version else "unknown",
+        "model": "sentence-transformers/all-mpnet-base-v2",
+        "embedding_dim": 768,
         "total_chunks": len(all_data['ids']),
         "sources": sources,
         "generated_at": None,  # Will be set when exporting
@@ -166,7 +170,7 @@ def export_to_json(output_dir: str, limit: int = None):
             "id": chunk_id,
             "content": document,
             "metadata": metadata,
-            "embedding": embedding  # 384-dim vector as array
+            "embedding": embedding  # 768-dim vector as array
         }
         export_data["chunks"].append(chunk_data)
 
@@ -200,6 +204,7 @@ def export_to_json(output_dir: str, limit: int = None):
 
     metadata_summary = {
         "version": export_data["version"],
+        "iwsdk_version": export_data["iwsdk_version"],
         "model": export_data["model"],
         "embedding_dim": export_data["embedding_dim"],
         "total_chunks": export_data["total_chunks"],
@@ -260,13 +265,8 @@ To regenerate this data (after ingesting new IWSDK versions):
 ```bash
 cd /path/to/iwsdk-rag
 
-# Re-ingest
-python scripts/ingest_multi.py /path/to/iwsdk --source iwsdk --clear
-python scripts/ingest_multi.py /path/to/elics --source elics
-python scripts/ingest_deps.py /path/to/iwsdk
-
-# Re-export
-python scripts/export_for_npm.py --output /path/to/iwsdk-rag-mcp/data/
+# Re-run ingestion
+npm run ingest
 ```
 """
 
@@ -302,8 +302,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Export to TypeScript project
-  python scripts/export_for_npm.py --output ../iwsdk-rag-mcp/data/
+  # Typically called automatically by npm run ingest
+
+  # Manual export (if needed)
+  python scripts/export_for_npm.py --output /path/to/iwsdk-rag/data/
 
   # Test with limited chunks
   python scripts/export_for_npm.py --output ./test_export/ --limit 100

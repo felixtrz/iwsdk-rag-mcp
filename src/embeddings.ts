@@ -1,7 +1,7 @@
 /**
  * Embedding service using transformers.js
  *
- * Uses the same model as Python: sentence-transformers/all-MiniLM-L6-v2
+ * Uses the same model as Python: sentence-transformers/all-mpnet-base-v2
  */
 
 import { pipeline, env } from '@xenova/transformers';
@@ -11,7 +11,7 @@ env.allowLocalModels = false;
 
 export class EmbeddingService {
   private extractor: any = null;
-  private modelName = 'Xenova/all-MiniLM-L6-v2';
+  private modelName = 'Xenova/all-mpnet-base-v2';
 
   async initialize(): Promise<void> {
     if (this.extractor) {

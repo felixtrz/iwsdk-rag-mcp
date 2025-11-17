@@ -15,9 +15,8 @@ import {
   CallToolResult,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-
-import { SearchService } from './search.js';
 import { FileService } from './files.js';
+import { SearchService } from './search.js';
 import {
   searchCode,
   findByRelationship,

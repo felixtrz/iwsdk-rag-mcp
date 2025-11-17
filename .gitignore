@@ -1,7 +1,7 @@
 # Python
-ingest/venv/
-ingest/__pycache__/
-ingest/**/__pycache__/
+scripts/ingest/venv/
+scripts/ingest/__pycache__/
+scripts/ingest/**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -12,13 +12,11 @@ build/
 *.egg
 
 # Node.js
-mcp/node_modules/
-mcp/dist/
-mcp/src/**/*.js
-mcp/package-lock.json
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
 # Vector Database
 chroma_db/
@@ -27,12 +25,12 @@ chroma_db/
 *.sqlite3
 
 # Temporary cloned repositories
-.temp/
+scripts/.temp/
 
 # Embeddings & Data
-mcp/data/chunks.json
-mcp/data/metadata.json
-mcp/data/sources/
+data/chunks.json
+data/metadata.json
+data/sources/
 
 # IDE
 .vscode/

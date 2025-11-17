@@ -20,19 +20,19 @@ class SimpleEmbedder(CodeEmbedder):
     """
     Simple embedder using sentence-transformers.
 
-    Uses 'all-MiniLM-L6-v2':
-    - Fast (14ms per chunk on CPU)
-    - Small (384 dimensions)
-    - Good general-purpose quality
+    Uses 'all-mpnet-base-v2':
+    - Higher quality than MiniLM (768 dimensions vs 384)
+    - Better semantic understanding
+    - Slower but more accurate (~3-4x slower)
     - Easy to swap for CodeT5+ later
     """
 
-    def __init__(self, model_name: str = 'all-MiniLM-L6-v2'):
+    def __init__(self, model_name: str = 'all-mpnet-base-v2'):
         """
         Initialize embedder.
 
         Args:
-            model_name: HuggingFace model name (default: all-MiniLM-L6-v2)
+            model_name: HuggingFace model name (default: all-mpnet-base-v2)
         """
         self._model_name = model_name
         print(f"🔄 Loading embedding model: {model_name}")

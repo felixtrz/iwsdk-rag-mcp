@@ -4,15 +4,15 @@ This directory contains pre-processed code chunks and embeddings for the IWSDK R
 
 ## Contents
 
-- `chunks.json` (41.8 MB) - All code chunks with embeddings and metadata
+- `chunks.json` (78.8 MB) - All code chunks with embeddings and metadata
 - `metadata.json` - Summary statistics
 
 ## Data Statistics
 
 - **Total chunks:** 3337
-- **Embedding model:** sentence-transformers/all-MiniLM-L6-v2
-- **Embedding dimensions:** 384
-- **Generated:** 2025-11-16T18:19:11.479932Z
+- **Embedding model:** sentence-transformers/all-mpnet-base-v2
+- **Embedding dimensions:** 768
+- **Generated:** 2025-11-17T16:35:00.735627Z
 
 ### Sources
 
@@ -48,11 +48,6 @@ To regenerate this data (after ingesting new IWSDK versions):
 ```bash
 cd /path/to/iwsdk-rag
 
-# Re-ingest
-python scripts/ingest_multi.py /path/to/iwsdk --source iwsdk --clear
-python scripts/ingest_multi.py /path/to/elics --source elics
-python scripts/ingest_deps.py /path/to/iwsdk
-
-# Re-export
-python scripts/export_for_npm.py --output /path/to/iwsdk-rag-mcp/data/
+# Re-run ingestion
+npm run ingest
 ```

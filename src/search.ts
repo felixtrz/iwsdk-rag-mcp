@@ -5,8 +5,8 @@
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import type { Chunk, ChunksData, SearchResult, RelationshipQuery } from './types.js';
 import { EmbeddingService, cosineSimilarity } from './embeddings.js';
+import type { Chunk, ChunksData, SearchResult, RelationshipQuery } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -15,9 +15,9 @@ const __dirname = dirname(__filename);
  * Helper to safely convert a field to an array
  */
 function toArray(value: any): string[] {
-  if (!value) return [];
-  if (Array.isArray(value)) return value;
-  if (typeof value === 'string') return [value];
+  if (!value) {return [];}
+  if (Array.isArray(value)) {return value;}
+  if (typeof value === 'string') {return [value];}
   return [];
 }
 
