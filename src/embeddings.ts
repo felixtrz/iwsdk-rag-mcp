@@ -1,17 +1,20 @@
 /**
  * Embedding service using transformers.js
  *
- * Uses the same model as Python: sentence-transformers/all-mpnet-base-v2
+ * Uses code-specialized model: jinaai/jina-embeddings-v2-base-code
+ * - Trained on 30+ programming languages
+ * - 8192 token context length
+ * - Better semantic understanding for code search
  */
 
-import { pipeline, env } from '@xenova/transformers';
+import { pipeline, env } from '@huggingface/transformers';
 
 // Disable local model caching in production
 env.allowLocalModels = false;
 
 export class EmbeddingService {
   private extractor: any = null;
-  private modelName = 'Xenova/all-mpnet-base-v2';
+  private modelName = 'jinaai/jina-embeddings-v2-base-code';
 
   async initialize(): Promise<void> {
     if (this.extractor) {

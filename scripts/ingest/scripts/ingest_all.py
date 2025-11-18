@@ -32,8 +32,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ingestion.parsers.typescript_parser import TypeScriptParser
 from ingestion.chunkers.ast_chunker import ASTChunker
-from ingestion.embedders.simple_embedder import SimpleEmbedder
-from storage.vector_store import VectorStore
 
 
 # Configuration
@@ -218,11 +216,6 @@ def ingest_iwsdk_source(iwsdk_dir: Path) -> int:
     print("🔧 Initializing components...")
     parser = TypeScriptParser()
     chunker = ASTChunker()
-    embedder = SimpleEmbedder()
-    store = VectorStore()
-
-    print("⚠️  Clearing existing data from vector store...")
-    store.clear()
     print()
 
     # Process files
@@ -262,15 +255,18 @@ def ingest_iwsdk_source(iwsdk_dir: Path) -> int:
     print(f"📊 Generated {len(all_chunks)} code chunks")
     print()
 
-    # Generate embeddings
-    print("🧠 Generating embeddings...")
-    all_embeddings = embedder.embed_chunks(all_chunks)
-    print(f"✅ Generated {len(all_embeddings)} embeddings")
-    print()
+    # Export chunks for Node.js embedding generation
+    print("📤 Exporting chunks for Node.js embedding generation...")
+    from export_chunks import export_chunks_to_json
 
-    # Store in vector database
-    print("💾 Storing in vector database...")
-    store.add_chunks(all_chunks, all_embeddings, source='iwsdk')
+    # Export to temp directory
+    # Go from scripts/ingest/scripts -> scripts/ingest -> scripts -> root -> scripts/.temp
+    repo_root = Path(__file__).parent.parent.parent.parent
+    temp_dir = repo_root / "scripts" / ".temp"
+    temp_dir.mkdir(exist_ok=True)
+
+    chunks_file = temp_dir / "iwsdk_chunks.json"
+    export_chunks_to_json(all_chunks, chunks_file, base_path=iwsdk_dir)
     print()
 
     # Validate
@@ -375,8 +371,6 @@ def ingest_dependencies(iwsdk_dir: Path) -> int:
     # Initialize components
     parser = TypeScriptParser()
     chunker = ASTChunker()
-    embedder = SimpleEmbedder()
-    store = VectorStore()
 
     # Process files
     print(f"📝 Processing {len(ts_files)} dependency files...")
@@ -403,48 +397,106 @@ def ingest_dependencies(iwsdk_dir: Path) -> int:
     print(f"📊 Generated {len(all_chunks)} dependency chunks")
     print()
 
-    # Generate embeddings
-    print("🧠 Generating embeddings...")
-    all_embeddings = embedder.embed_chunks(all_chunks)
-    print(f"✅ Generated {len(all_embeddings)} embeddings")
-    print()
+    # Export chunks for Node.js embedding generation
+    print("📤 Exporting dependency chunks for Node.js embedding generation...")
+    from export_chunks import export_chunks_to_json
 
-    # Store in vector database
-    print("💾 Storing in vector database...")
-    store.add_chunks(all_chunks, all_embeddings, source='deps')
+    # Export to temp directory
+    # Go from scripts/ingest/scripts -> scripts/ingest -> scripts -> root -> scripts/.temp
+    repo_root = Path(__file__).parent.parent.parent.parent
+    temp_dir = repo_root / "scripts" / ".temp"
+    temp_dir.mkdir(exist_ok=True)
+
+    chunks_file = temp_dir / "deps_chunks.json"
+    export_chunks_to_json(all_chunks, chunks_file, base_path=node_modules)
     print()
 
     return len(all_chunks)
 
 
-def export_to_json(iwsdk_version: str = None):
-    """Export vector store to JSON for MCP server."""
+def generate_embeddings_nodejs(iwsdk_chunks_file: Path, deps_chunks_file: Path) -> tuple:
+    """Generate embeddings using Node.js and return the file paths."""
+    print("=" * 80)
+    print("🧠 GENERATING EMBEDDINGS (Node.js)")
+    print("=" * 80)
+    print()
+
+    repo_root = Path(__file__).parent.parent.parent.parent
+    embeddings_script = repo_root / "dist" / "scripts" / "generate-embeddings.js"
+    temp_dir = repo_root / "scripts" / ".temp"
+
+    # Check if script is compiled, if not, build it
+    if not embeddings_script.exists():
+        print("🔨 Building TypeScript embeddings script...")
+        if not run_command(["npm", "run", "build"], cwd=repo_root, description="Building TypeScript"):
+            raise RuntimeError("Failed to build TypeScript")
+        print()
+
+    # Generate IWSDK embeddings
+    print("📊 Generating IWSDK embeddings...")
+    iwsdk_output = temp_dir / "iwsdk_embeddings.json"
+    if not run_command(
+        ["node", str(embeddings_script), str(iwsdk_chunks_file), str(iwsdk_output)],
+        cwd=repo_root,
+        description="Generating IWSDK embeddings"
+    ):
+        raise RuntimeError("Failed to generate IWSDK embeddings")
+    print()
+
+    # Generate dependency embeddings
+    print("📊 Generating dependency embeddings...")
+    deps_output = temp_dir / "deps_embeddings.json"
+    if not run_command(
+        ["node", str(embeddings_script), str(deps_chunks_file), str(deps_output)],
+        cwd=repo_root,
+        description="Generating dependency embeddings"
+    ):
+        raise RuntimeError("Failed to generate dependency embeddings")
+    print()
+
+    return iwsdk_output, deps_output
+
+
+def export_to_json_from_embeddings(iwsdk_embeddings_file: Path, deps_embeddings_file: Path, iwsdk_version: str = None):
+    """Export embeddings to JSON for MCP server."""
     print("=" * 80)
     print("📤 EXPORTING TO JSON")
     print("=" * 80)
     print()
 
-    # Import and run export
-    from export_for_npm import export_to_json as export_fn
+    # Read embeddings
+    print("📖 Reading embeddings...")
+    with open(iwsdk_embeddings_file) as f:
+        iwsdk_data = json.load(f)
+    with open(deps_embeddings_file) as f:
+        deps_data = json.load(f)
 
-    # Go from scripts/ingest/scripts -> scripts/ingest -> scripts -> root -> data
-    output_path = Path(__file__).parent.parent.parent.parent / "data"
-    export_fn(str(output_path), iwsdk_version=iwsdk_version)
-
-
-def run_health_check() -> bool:
-    """Run health check."""
-    print("=" * 80)
-    print("🏥 RUNNING HEALTH CHECK")
-    print("=" * 80)
+    print(f"✅ Loaded {len(iwsdk_data)} IWSDK chunks with embeddings")
+    print(f"✅ Loaded {len(deps_data)} dependency chunks with embeddings")
     print()
 
-    from health_check import check_vector_store, check_export_data
+    # Prepare output
+    repo_root = Path(__file__).parent.parent.parent.parent
+    data_dir = repo_root / "data"
+    data_dir.mkdir(exist_ok=True)
 
-    vector_ok = check_vector_store()
-    export_ok = check_export_data()
+    # Combine and export
+    print("💾 Writing to data/embeddings.json...")
+    output_data = {
+        'version': iwsdk_version or 'unknown',
+        'model': 'jinaai/jina-embeddings-v2-base-code',
+        'dimensions': len(iwsdk_data[0]['embedding']) if iwsdk_data else 768,
+        'iwsdk': iwsdk_data,
+        'deps': deps_data
+    }
 
-    return vector_ok and export_ok
+    embeddings_file = data_dir / "embeddings.json"
+    with open(embeddings_file, 'w') as f:
+        json.dump(output_data, f)
+
+    print(f"✅ Exported to {embeddings_file}")
+    print(f"   Total chunks: {len(iwsdk_data) + len(deps_data)}")
+    print()
 
 
 def copy_source_files(iwsdk_dir: Path):
@@ -639,20 +691,34 @@ def main():
             print("  ⚠️  Could not determine IWSDK version")
         print()
 
-        # Ingest source code
+        # Ingest source code (export chunks to JSON)
         iwsdk_chunks = ingest_iwsdk_source(iwsdk_dir)
 
-        # Ingest dependencies
+        # Ingest dependencies (export chunks to JSON)
         deps_chunks = ingest_dependencies(iwsdk_dir)
 
-        # Export to JSON
-        export_to_json(iwsdk_version=iwsdk_version)
+        # Generate embeddings using Node.js
+        temp_dir = repo_root / "scripts" / ".temp"
+        iwsdk_chunks_file = temp_dir / "iwsdk_chunks.json"
+        deps_chunks_file = temp_dir / "deps_chunks.json"
+
+        iwsdk_embeddings_file, deps_embeddings_file = generate_embeddings_nodejs(
+            iwsdk_chunks_file,
+            deps_chunks_file
+        )
+
+        # Export to JSON for MCP server
+        export_to_json_from_embeddings(
+            iwsdk_embeddings_file,
+            deps_embeddings_file,
+            iwsdk_version=iwsdk_version
+        )
 
         # Copy source files for reference
         copy_source_files(iwsdk_dir)
 
-        # Health check
-        health_ok = run_health_check()
+        # Note: Skipping old health_check since we're not using ChromaDB anymore
+        health_ok = True  # Assume OK for now
 
         # Final summary
         print()

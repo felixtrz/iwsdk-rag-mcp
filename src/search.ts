@@ -6,7 +6,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { EmbeddingService, cosineSimilarity } from './embeddings.js';
-import type { Chunk, ChunksData, SearchResult, RelationshipQuery } from './types.js';
+import type { Chunk, ChunksData, EmbeddingsData, RawChunk, SearchResult, RelationshipQuery } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,16 +37,34 @@ export class SearchService {
 
     console.error('Initializing search service...');
 
-    // Load chunks data
-    const dataPath = join(__dirname, '..', 'data', 'chunks.json');
-    console.error(`Loading chunks from ${dataPath}...`);
+    // Try new embeddings.json format first, fall back to legacy chunks.json
+    const embeddingsPath = join(__dirname, '..', 'data', 'embeddings.json');
+    const chunksPath = join(__dirname, '..', 'data', 'chunks.json');
 
-    const data = JSON.parse(readFileSync(dataPath, 'utf-8')) as ChunksData;
-    this.chunks = data.chunks;
+    try {
+      console.error(`Loading embeddings from ${embeddingsPath}...`);
+      const data = JSON.parse(readFileSync(embeddingsPath, 'utf-8')) as EmbeddingsData;
 
-    console.error(`Loaded ${this.chunks.length} chunks from ${Object.keys(data.sources).length} sources`);
-    for (const [source, count] of Object.entries(data.sources)) {
-      console.error(`  - ${source}: ${count} chunks`);
+      // Transform raw chunks into Chunk objects
+      this.chunks = [
+        ...data.iwsdk.map((raw, idx) => this.rawChunkToChunk(raw, `iwsdk_${idx}`)),
+        ...data.deps.map((raw, idx) => this.rawChunkToChunk(raw, `deps_${idx}`))
+      ];
+
+      console.error(`Loaded ${this.chunks.length} chunks using ${data.model}`);
+      console.error(`  - iwsdk: ${data.iwsdk.length} chunks`);
+      console.error(`  - deps: ${data.deps.length} chunks`);
+      console.error(`  - embedding dimensions: ${data.dimensions}`);
+    } catch (error) {
+      // Fall back to legacy format
+      console.error(`Could not load embeddings.json, trying chunks.json...`);
+      const data = JSON.parse(readFileSync(chunksPath, 'utf-8')) as ChunksData;
+      this.chunks = data.chunks;
+
+      console.error(`Loaded ${this.chunks.length} chunks from ${Object.keys(data.sources).length} sources`);
+      for (const [source, count] of Object.entries(data.sources)) {
+        console.error(`  - ${source}: ${count} chunks`);
+      }
     }
 
     // Initialize embedding service
@@ -54,6 +72,34 @@ export class SearchService {
 
     this.initialized = true;
     console.error('Search service initialized successfully');
+  }
+
+  /**
+   * Transform a RawChunk from embeddings.json into a Chunk object
+   */
+  private rawChunkToChunk(raw: RawChunk, id: string): Chunk {
+    return {
+      id,
+      content: raw.content,
+      embedding: raw.embedding,
+      metadata: {
+        source: raw.source,
+        file_path: raw.file_path,
+        chunk_type: raw.chunk_type,
+        name: raw.name,
+        start_line: raw.start_line,
+        end_line: raw.end_line,
+        class_context: raw.class_name,
+        semantic_labels: raw.semantic_labels,
+        extends: raw.extends,
+        implements: raw.implements,
+        imports: raw.imports,
+        calls: raw.calls,
+        webxr_api_usage: raw.webxr_api_usage,
+        ecs_component: raw.ecs_component,
+        ecs_system: raw.ecs_system,
+      }
+    };
   }
 
   /**
