@@ -29,15 +29,11 @@ export class FileService {
       : relativePath;
 
     if (source === 'iwsdk') {
-      // Search in all IWSDK packages
+      // New structure: data/sources/iwsdk/packages/{package}/src/...
+      // Chunk paths are: packages/{package}/src/...
+      // So just join directly
       const iwsdkDir = join(this.sourcesDir, 'iwsdk');
-      const packages = readdirSync(iwsdkDir).filter(p =>
-        statSync(join(iwsdkDir, p)).isDirectory()
-      );
-
-      for (const pkg of packages) {
-        searchPaths.push(join(iwsdkDir, pkg, pathWithoutSrc));
-      }
+      searchPaths.push(join(iwsdkDir, relativePath));
     } else if (source === 'elics') {
       searchPaths.push(join(this.sourcesDir, 'elics', 'src', pathWithoutSrc));
     } else if (source === 'deps') {

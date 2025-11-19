@@ -79,9 +79,10 @@ export default [
     ignores: [
       'node_modules/**',
       'dist/**',
+      'dist-tools/**',
       'data/**',
-      'scripts/ingest/venv/**',
-      'scripts/.temp/**',
+      'tools/.temp/**',
+      '.temp/**',
       '*.js', // Ignore JS files in root (like this config file)
       '*.mjs',
       '*.d.ts',

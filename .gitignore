@@ -1,15 +1,7 @@
-# Python
-scripts/ingest/venv/
-scripts/ingest/__pycache__/
-scripts/ingest/**/__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
+# Build outputs
 dist/
+dist-tools/
 build/
-*.egg
 
 # Node.js
 node_modules/
@@ -24,13 +16,12 @@ chroma_db/
 *.sqlite
 *.sqlite3
 
-# Temporary cloned repositories
-scripts/.temp/
+# Temporary cloned repositories and build artifacts
+tools/.temp/
+.temp/
 
-# Embeddings & Data
-data/chunks.json
-data/metadata.json
-data/sources/
+# Embeddings & Data (all generated, included in npm package but not git)
+data/
 
 # IDE
 .vscode/

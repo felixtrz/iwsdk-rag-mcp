@@ -150,8 +150,9 @@ iwsdk-rag/
 │   ├── chunks.json       # Pre-computed embeddings (83MB)
 │   ├── metadata.json     # Database metadata
 │   └── sources/          # Source files for get_file_content
-├── scripts/               # Development tools
-│   └── ingest/           # Python ingestion pipeline
+├── src/
+│   └── scripts/
+│       └── ingest.ts     # TypeScript ingestion pipeline
 ├── package.json           # Package configuration
 ├── pnpm-lock.yaml         # pnpm lockfile
 ├── tsconfig.json          # TypeScript configuration
@@ -174,17 +175,16 @@ pnpm run build
 If you need to re-ingest the IWSDK codebase (e.g., after SDK updates):
 
 ```bash
-cd scripts
-./ingest.sh
+npm run ingest
 ```
 
-This will run the Python ingestion pipeline to regenerate the vector database.
+This will run the TypeScript ingestion pipeline to regenerate the vector database.
 
 ## How It Works
 
 ### Architecture
 
-1. **Ingestion (Python)**: Parses TypeScript code using tree-sitter, chunks semantically, generates embeddings
+1. **Ingestion (TypeScript)**: Parses TypeScript code using ts-morph, chunks semantically, generates embeddings
 2. **Storage**: Pre-computed embeddings stored in JSON (~83MB)
 3. **MCP Server (TypeScript)**: Loads embeddings at startup, performs semantic search using transformers.js
 4. **AI Assistant**: Uses MCP tools to search and understand the codebase

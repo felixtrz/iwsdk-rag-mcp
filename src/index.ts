@@ -26,7 +26,7 @@ import {
   listEcsSystems,
   findDependents,
   findUsageExamples,
-} from "./tools/index.js";
+} from "./tools.js";
 
 // Create services
 const searchService = new SearchService();

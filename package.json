@@ -9,11 +9,12 @@
   "type": "module",
   "scripts": {
     "build": "tsc && chmod +x dist/index.js",
+    "build:tools": "tsc -p tsconfig.tools.json",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "test": "node test/compare_results.js",
     "prepare": "npm run build",
-    "ingest": "bash scripts/ingest.sh",
+    "ingest": "npm run build:tools && node dist-tools/tools/ingest.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },
@@ -51,8 +52,13 @@
     "url": "https://github.com/sponsors/felixtrz"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.1.2",
+    "@langchain/core": "^1.0.5",
+    "@langchain/textsplitters": "^1.0.0",
     "@modelcontextprotocol/sdk": "^0.5.0",
-    "@huggingface/transformers": "^3.1.2"
+    "glob": "^12.0.0",
+    "ts-morph": "^27.0.2",
+    "webgpu": "^0.3.8"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
