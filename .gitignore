@@ -39,3 +39,6 @@ data/
 # Logs
 *.log
 logs/
+
+# Cache
+node-compile-cache/
