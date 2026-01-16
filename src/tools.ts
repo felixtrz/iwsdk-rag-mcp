@@ -10,6 +10,7 @@
 import { FileService } from './files.js';
 import type { SearchService } from './search.js';
 import type { Chunk } from './types.js';
+import type { TelemetryLogger, EventType, LogLevel, LogEntry } from './telemetry.js';
 
 export interface ToolResult {
   content: Array<{ type: 'text'; text: string }>;
@@ -727,4 +728,230 @@ export async function findUsageExamples(
       isError: true
     };
   }
+}
+
+/**
+ * Tool 9: get_telemetry
+ *
+ * Query telemetry data and session statistics.
+ * Provides insights into how LLMs are using the MCP server.
+ */
+export async function getTelemetry(
+  telemetry: TelemetryLogger,
+  args: {
+    query_type: 'current_session' | 'recent_logs' | 'aggregated_stats' | 'list_files';
+    event_type?: EventType | EventType[];
+    tool_name?: string;
+    session_id?: string;
+    since?: string;
+    until?: string;
+    level?: LogLevel | LogLevel[];
+    limit?: number;
+    current_session_only?: boolean;
+  }
+): Promise<ToolResult> {
+  try {
+    const output: string[] = [];
+
+    switch (args.query_type) {
+      case 'current_session': {
+        const info = telemetry.getCurrentSessionInfo();
+        output.push('# Current Session Information');
+        output.push('');
+        output.push(`**Session ID**: ${info.session_id}`);
+        output.push(`**Started**: ${info.start_time}`);
+        output.push(`**Uptime**: ${formatDuration(info.uptime_ms)}`);
+        output.push(`**Log File**: ${info.log_file}`);
+        output.push('');
+        output.push('## Statistics');
+        output.push('');
+        output.push(`- **Total Tool Calls**: ${info.tool_calls}`);
+        output.push(`- **Total Errors**: ${info.errors}`);
+        output.push(`- **Total Processing Time**: ${formatDuration(info.total_processing_time_ms)}`);
+        output.push('');
+
+        if (Object.keys(info.tool_calls_by_name).length > 0) {
+          output.push('## Tool Usage Breakdown');
+          output.push('');
+          output.push('| Tool | Calls |');
+          output.push('|------|-------|');
+          for (const [tool, count] of Object.entries(info.tool_calls_by_name)) {
+            output.push(`| ${tool} | ${count} |`);
+          }
+        }
+        break;
+      }
+
+      case 'recent_logs': {
+        const entries = await telemetry.queryLogs({
+          event_type: args.event_type,
+          tool_name: args.tool_name,
+          session_id: args.session_id,
+          since: args.since,
+          until: args.until,
+          level: args.level,
+          limit: args.limit ?? 50,
+          include_current_session_only: args.current_session_only,
+        });
+
+        output.push('# Recent Log Entries');
+        output.push('');
+        output.push(`Found ${entries.length} entries matching filters.`);
+        output.push('');
+
+        for (const entry of entries) {
+          output.push(formatLogEntry(entry));
+          output.push('');
+        }
+        break;
+      }
+
+      case 'aggregated_stats': {
+        const stats = await telemetry.getAggregatedStats({
+          since: args.since,
+          until: args.until,
+          session_id: args.session_id,
+        });
+
+        output.push('# Aggregated Telemetry Statistics');
+        output.push('');
+        output.push('## Overview');
+        output.push('');
+        output.push(`- **Total Sessions**: ${stats.total_sessions}`);
+        output.push(`- **Total Tool Calls**: ${stats.total_tool_calls}`);
+        output.push(`- **Total Errors**: ${stats.total_errors}`);
+        output.push('');
+
+        if (Object.keys(stats.tool_usage).length > 0) {
+          output.push('## Tool Performance');
+          output.push('');
+          output.push('| Tool | Calls | Avg Duration | Errors |');
+          output.push('|------|-------|--------------|--------|');
+          for (const [tool, data] of Object.entries(stats.tool_usage)) {
+            output.push(`| ${tool} | ${data.count} | ${data.avg_duration_ms}ms | ${data.error_count} |`);
+          }
+          output.push('');
+        }
+
+        if (stats.sessions.length > 0) {
+          output.push('## Recent Sessions');
+          output.push('');
+          output.push('| Session ID | Started | Tool Calls | Errors |');
+          output.push('|------------|---------|------------|--------|');
+          for (const session of stats.sessions) {
+            const shortId = session.session_id.substring(0, 12) + '...';
+            output.push(`| ${shortId} | ${session.start_time.split('T')[0]} | ${session.tool_calls} | ${session.errors} |`);
+          }
+        }
+        break;
+      }
+
+      case 'list_files': {
+        const files = await telemetry.listLogFiles();
+
+        output.push('# Telemetry Log Files');
+        output.push('');
+        output.push(`**Log Directory**: ${telemetry.getLogDirectory()}`);
+        output.push('');
+
+        if (files.length === 0) {
+          output.push('No log files found.');
+        } else {
+          output.push('| Filename | Size | Last Modified |');
+          output.push('|----------|------|---------------|');
+          for (const file of files) {
+            const sizeKb = (file.size_bytes / 1024).toFixed(1);
+            output.push(`| ${file.filename} | ${sizeKb} KB | ${file.modified.split('T')[0]} |`);
+          }
+        }
+        break;
+      }
+
+      default:
+        return {
+          content: [{
+            type: 'text',
+            text: `Unknown query type: ${args.query_type}. Valid types: current_session, recent_logs, aggregated_stats, list_files`
+          }],
+          isError: true
+        };
+    }
+
+    return {
+      content: [{
+        type: 'text',
+        text: output.join('\n')
+      }]
+    };
+  } catch (error) {
+    return {
+      content: [{
+        type: 'text',
+        text: `Error querying telemetry: ${error instanceof Error ? error.message : String(error)}`
+      }],
+      isError: true
+    };
+  }
+}
+
+/**
+ * Format duration in milliseconds to human-readable string
+ */
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  if (ms < 3600000) return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
+  return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`;
+}
+
+/**
+ * Format a log entry for display
+ */
+function formatLogEntry(entry: LogEntry): string {
+  const lines: string[] = [];
+  const { timestamp, event_type: eventType, level, session_id } = entry;
+
+  lines.push(`### [${level.toUpperCase()}] ${eventType} @ ${timestamp}`);
+
+  // Use type narrowing via event_type discriminant
+  if (entry.event_type === 'tool_request') {
+    lines.push(`- **Tool**: ${entry.tool_name}`);
+    lines.push(`- **Request ID**: ${entry.request_id}`);
+    lines.push(`- **Args**: ${entry.argument_summary}`);
+  } else if (entry.event_type === 'tool_response') {
+    lines.push(`- **Tool**: ${entry.tool_name}`);
+    lines.push(`- **Duration**: ${entry.duration_ms}ms`);
+    lines.push(`- **Success**: ${entry.success}`);
+    lines.push(`- **Result Size**: ${entry.result_size_bytes} bytes`);
+  } else if (entry.event_type === 'tool_error') {
+    lines.push(`- **Tool**: ${entry.tool_name}`);
+    lines.push(`- **Duration**: ${entry.duration_ms}ms`);
+    lines.push(`- **Error**: ${entry.error_message}`);
+  } else if (entry.event_type === 'session_start') {
+    lines.push(`- **Session**: ${session_id}`);
+    lines.push(`- **Server Version**: ${entry.server_version}`);
+    lines.push(`- **Platform**: ${entry.platform}`);
+  } else if (entry.event_type === 'session_end') {
+    lines.push(`- **Duration**: ${formatDuration(entry.duration_ms)}`);
+    lines.push(`- **Tool Calls**: ${entry.total_tool_calls}`);
+    lines.push(`- **Errors**: ${entry.total_errors}`);
+  } else if (entry.event_type === 'service_init') {
+    lines.push(`- **Service**: ${entry.service_name}`);
+    lines.push(`- **Duration**: ${entry.duration_ms}ms`);
+    lines.push(`- **Success**: ${entry.success}`);
+  } else if (entry.event_type === 'system_error') {
+    lines.push(`- **Error**: ${entry.error_message}`);
+    if (entry.context) {
+      lines.push(`- **Context**: ${JSON.stringify(entry.context)}`);
+    }
+  } else {
+    // Generic formatting for other event types
+    for (const [key, value] of Object.entries(entry)) {
+      if (!['timestamp', 'event_type', 'level', 'session_id'].includes(key)) {
+        lines.push(`- **${key}**: ${JSON.stringify(value)}`);
+      }
+    }
+  }
+
+  return lines.join('\n');
 }

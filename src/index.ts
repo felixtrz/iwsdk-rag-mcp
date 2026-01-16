@@ -26,6 +26,7 @@ import {
   listEcsSystems,
   findDependents,
   findUsageExamples,
+  getTelemetry,
 } from "./tools.js";
 import {
   TelemetryLogger,
@@ -271,6 +272,69 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["api_name"],
         },
       },
+      {
+        name: "get_telemetry",
+        description:
+          "Query telemetry data and session statistics. Provides insights into MCP server usage, tool performance, and session history.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query_type: {
+              type: "string",
+              enum: ["current_session", "recent_logs", "aggregated_stats", "list_files"],
+              description:
+                "Type of telemetry query: 'current_session' for live stats, 'recent_logs' for log entries, 'aggregated_stats' for historical analysis, 'list_files' to see available log files",
+            },
+            event_type: {
+              type: "array",
+              items: {
+                type: "string",
+                enum: [
+                  "session_start",
+                  "session_end",
+                  "tool_request",
+                  "tool_response",
+                  "tool_error",
+                  "service_init",
+                  "system_error",
+                ],
+              },
+              description: "Filter by event type(s) - only for recent_logs query",
+            },
+            tool_name: {
+              type: "string",
+              description: "Filter by specific tool name - only for recent_logs query",
+            },
+            level: {
+              type: "array",
+              items: {
+                type: "string",
+                enum: ["debug", "info", "warn", "error"],
+              },
+              description: "Filter by log level(s) - only for recent_logs query",
+            },
+            since: {
+              type: "string",
+              description: "Filter entries after this ISO timestamp",
+            },
+            until: {
+              type: "string",
+              description: "Filter entries before this ISO timestamp",
+            },
+            limit: {
+              type: "number",
+              description: "Maximum number of log entries to return (default: 50)",
+              default: 50,
+            },
+            current_session_only: {
+              type: "boolean",
+              description: "Only include entries from the current session (default: false)",
+              default: false,
+            },
+          },
+          required: ["query_type"],
+        },
+      },
     ],
   };
 });
@@ -341,6 +405,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "find_usage_examples":
         result = (await findUsageExamples(
           searchService,
+          args as any
+        )) as CallToolResult;
+        break;
+
+      case "get_telemetry":
+        result = (await getTelemetry(
+          telemetry,
           args as any
         )) as CallToolResult;
         break;

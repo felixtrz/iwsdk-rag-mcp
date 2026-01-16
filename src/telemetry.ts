@@ -415,6 +415,265 @@ export class TelemetryLogger {
     );
   }
 
+  getLogDirectory(): string {
+    return this.config.log_directory;
+  }
+
+  // --------------------------------------------------------------------------
+  // Query Methods (for MCP tool access)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Get current session information and statistics
+   */
+  getCurrentSessionInfo(): {
+    session_id: string;
+    start_time: string;
+    uptime_ms: number;
+    tool_calls: number;
+    errors: number;
+    tool_calls_by_name: Record<string, number>;
+    total_processing_time_ms: number;
+    log_file: string;
+  } {
+    const uptimeMs = Date.now() - this.sessionStats.startTime.getTime();
+    const toolCallsByName: Record<string, number> = {};
+    this.sessionStats.toolCallsByName.forEach((count, name) => {
+      toolCallsByName[name] = count;
+    });
+
+    return {
+      session_id: this.sessionId,
+      start_time: this.sessionStats.startTime.toISOString(),
+      uptime_ms: uptimeMs,
+      tool_calls: this.sessionStats.toolCalls,
+      errors: this.sessionStats.errors,
+      tool_calls_by_name: toolCallsByName,
+      total_processing_time_ms: this.sessionStats.totalDuration,
+      log_file: this.currentLogFile || this.getLogFilePath(),
+    };
+  }
+
+  /**
+   * List available log files
+   */
+  async listLogFiles(): Promise<Array<{ filename: string; size_bytes: number; modified: string }>> {
+    try {
+      const files = await fs.promises.readdir(this.config.log_directory);
+      const logFiles = files.filter(
+        (f) => f.startsWith(this.config.log_file_prefix) && f.endsWith(".jsonl")
+      );
+
+      const fileInfos = await Promise.all(
+        logFiles.map(async (filename) => {
+          const filePath = path.join(this.config.log_directory, filename);
+          const stats = await fs.promises.stat(filePath);
+          return {
+            filename,
+            size_bytes: stats.size,
+            modified: stats.mtime.toISOString(),
+          };
+        })
+      );
+
+      return fileInfos.sort((a, b) => b.modified.localeCompare(a.modified));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Query log entries with filtering options
+   */
+  async queryLogs(options: {
+    event_type?: EventType | EventType[];
+    tool_name?: string;
+    session_id?: string;
+    since?: string;
+    until?: string;
+    level?: LogLevel | LogLevel[];
+    limit?: number;
+    include_current_session_only?: boolean;
+  } = {}): Promise<LogEntry[]> {
+    const limit = options.limit ?? 100;
+    const results: LogEntry[] = [];
+
+    // Determine which log files to read
+    const logFiles = await this.listLogFiles();
+    if (logFiles.length === 0) {
+      return [];
+    }
+
+    // Read log files (most recent first)
+    for (const fileInfo of logFiles) {
+      if (results.length >= limit) break;
+
+      const filePath = path.join(this.config.log_directory, fileInfo.filename);
+      try {
+        const content = await fs.promises.readFile(filePath, "utf-8");
+        const lines = content.trim().split("\n").filter(Boolean);
+
+        // Parse lines in reverse order (most recent first)
+        for (let i = lines.length - 1; i >= 0; i--) {
+          if (results.length >= limit) break;
+
+          try {
+            const entry = JSON.parse(lines[i]) as LogEntry;
+
+            // Apply filters
+            if (!this.matchesFilter(entry, options)) continue;
+
+            results.push(entry);
+          } catch {
+            // Skip malformed lines
+          }
+        }
+      } catch {
+        // Skip files that can't be read
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get aggregated statistics from logs
+   */
+  async getAggregatedStats(options: {
+    since?: string;
+    until?: string;
+    session_id?: string;
+  } = {}): Promise<{
+    total_sessions: number;
+    total_tool_calls: number;
+    total_errors: number;
+    tool_usage: Record<string, { count: number; total_duration_ms: number; avg_duration_ms: number; error_count: number }>;
+    sessions: Array<{ session_id: string; start_time: string; tool_calls: number; errors: number }>;
+  }> {
+    const entries = await this.queryLogs({
+      ...options,
+      limit: 10000, // Get more entries for aggregation
+    });
+
+    const sessions = new Map<string, { start_time: string; tool_calls: number; errors: number }>();
+    const toolUsage = new Map<string, { count: number; total_duration_ms: number; error_count: number }>();
+
+    for (const entry of entries) {
+      // Track sessions
+      if (entry.event_type === "session_start") {
+        if (!sessions.has(entry.session_id)) {
+          sessions.set(entry.session_id, {
+            start_time: entry.timestamp,
+            tool_calls: 0,
+            errors: 0,
+          });
+        }
+      }
+
+      // Track tool usage
+      if (entry.event_type === "tool_response") {
+        const toolEntry = entry as ToolResponseEntry;
+        const existing = toolUsage.get(toolEntry.tool_name) || {
+          count: 0,
+          total_duration_ms: 0,
+          error_count: 0,
+        };
+        existing.count++;
+        existing.total_duration_ms += toolEntry.duration_ms;
+        if (!toolEntry.success) existing.error_count++;
+        toolUsage.set(toolEntry.tool_name, existing);
+
+        // Update session stats
+        const session = sessions.get(entry.session_id);
+        if (session) {
+          session.tool_calls++;
+          if (!toolEntry.success) session.errors++;
+        }
+      }
+
+      if (entry.event_type === "tool_error") {
+        const toolEntry = entry as ToolErrorEntry;
+        const existing = toolUsage.get(toolEntry.tool_name) || {
+          count: 0,
+          total_duration_ms: 0,
+          error_count: 0,
+        };
+        existing.error_count++;
+        toolUsage.set(toolEntry.tool_name, existing);
+
+        const session = sessions.get(entry.session_id);
+        if (session) session.errors++;
+      }
+    }
+
+    // Calculate averages and format output
+    const toolUsageOutput: Record<string, { count: number; total_duration_ms: number; avg_duration_ms: number; error_count: number }> = {};
+    toolUsage.forEach((stats, name) => {
+      toolUsageOutput[name] = {
+        ...stats,
+        avg_duration_ms: stats.count > 0 ? Math.round(stats.total_duration_ms / stats.count) : 0,
+      };
+    });
+
+    const sessionsArray = Array.from(sessions.entries()).map(([id, data]) => ({
+      session_id: id,
+      ...data,
+    }));
+
+    return {
+      total_sessions: sessions.size,
+      total_tool_calls: Array.from(toolUsage.values()).reduce((sum, t) => sum + t.count, 0),
+      total_errors: Array.from(toolUsage.values()).reduce((sum, t) => sum + t.error_count, 0),
+      tool_usage: toolUsageOutput,
+      sessions: sessionsArray.slice(0, 20), // Limit sessions in output
+    };
+  }
+
+  private matchesFilter(entry: LogEntry, options: {
+    event_type?: EventType | EventType[];
+    tool_name?: string;
+    session_id?: string;
+    since?: string;
+    until?: string;
+    level?: LogLevel | LogLevel[];
+    include_current_session_only?: boolean;
+  }): boolean {
+    // Filter by current session
+    if (options.include_current_session_only && entry.session_id !== this.sessionId) {
+      return false;
+    }
+
+    // Filter by session_id
+    if (options.session_id && entry.session_id !== options.session_id) {
+      return false;
+    }
+
+    // Filter by event type
+    if (options.event_type) {
+      const types = Array.isArray(options.event_type) ? options.event_type : [options.event_type];
+      if (!types.includes(entry.event_type)) return false;
+    }
+
+    // Filter by level
+    if (options.level) {
+      const levels = Array.isArray(options.level) ? options.level : [options.level];
+      if (!levels.includes(entry.level)) return false;
+    }
+
+    // Filter by tool name (for tool-related events)
+    if (options.tool_name) {
+      if ("tool_name" in entry && entry.tool_name !== options.tool_name) {
+        return false;
+      }
+    }
+
+    // Filter by time range
+    if (options.since && entry.timestamp < options.since) return false;
+    if (options.until && entry.timestamp > options.until) return false;
+
+    return true;
+  }
+
   // --------------------------------------------------------------------------
   // Private Methods
   // --------------------------------------------------------------------------
