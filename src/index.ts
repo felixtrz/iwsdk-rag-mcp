@@ -27,10 +27,21 @@ import {
   findDependents,
   findUsageExamples,
 } from "./tools.js";
+import {
+  TelemetryLogger,
+  initializeTelemetry,
+  shutdownTelemetry,
+} from "./telemetry.js";
 
 // Create services
 const searchService = new SearchService();
 const fileService = new FileService();
+
+// Initialize telemetry logger
+const telemetry: TelemetryLogger = initializeTelemetry({
+  enabled: process.env.MCP_TELEMETRY_ENABLED !== "false",
+  log_level: (process.env.MCP_TELEMETRY_LEVEL as "debug" | "info" | "warn" | "error") || "info",
+});
 
 // Create MCP server
 const server = new Server(
@@ -264,59 +275,78 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-// Handle tool calls
+// Handle tool calls with telemetry
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  const requestId = telemetry.generateRequestId();
+  const startTime = Date.now();
+
+  // Log the incoming request
+  await telemetry.logToolRequest(
+    requestId,
+    name,
+    (args as Record<string, unknown>) || {}
+  );
 
   try {
+    let result: CallToolResult;
+
     switch (name) {
       case "search_code":
-        return (await searchCode(searchService, args as any)) as CallToolResult;
+        result = (await searchCode(searchService, args as any)) as CallToolResult;
+        break;
 
       case "find_by_relationship":
-        return (await findByRelationship(
+        result = (await findByRelationship(
           searchService,
           args as any
         )) as CallToolResult;
+        break;
 
       case "get_api_reference":
-        return (await getApiReference(
+        result = (await getApiReference(
           searchService,
           args as any
         )) as CallToolResult;
+        break;
 
       case "get_file_content":
-        return (await getFileContent(
+        result = (await getFileContent(
           fileService,
           args as any
         )) as CallToolResult;
+        break;
 
       case "list_ecs_components":
-        return (await listEcsComponents(
+        result = (await listEcsComponents(
           searchService,
           args as any
         )) as CallToolResult;
+        break;
 
       case "list_ecs_systems":
-        return (await listEcsSystems(
+        result = (await listEcsSystems(
           searchService,
           args as any
         )) as CallToolResult;
+        break;
 
       case "find_dependents":
-        return (await findDependents(
+        result = (await findDependents(
           searchService,
           args as any
         )) as CallToolResult;
+        break;
 
       case "find_usage_examples":
-        return (await findUsageExamples(
+        result = (await findUsageExamples(
           searchService,
           args as any
         )) as CallToolResult;
+        break;
 
       default:
-        return {
+        result = {
           content: [
             {
               type: "text",
@@ -326,7 +356,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           isError: true,
         } as CallToolResult;
     }
+
+    // Log the successful response
+    const durationMs = Date.now() - startTime;
+    await telemetry.logToolResponse(
+      requestId,
+      name,
+      durationMs,
+      result as { content: Array<{ type: string; text?: string }>; isError?: boolean }
+    );
+
+    return result;
   } catch (error) {
+    // Log the error
+    const durationMs = Date.now() - startTime;
+    await telemetry.logToolError(requestId, name, error, durationMs);
+
     return {
       content: [
         {
@@ -345,17 +390,71 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   console.error("Starting IWSDK RAG MCP Server...");
 
+  // Initialize telemetry
+  let telemetryInitStart = Date.now();
+  try {
+    await telemetry.initialize();
+    await telemetry.logServiceInit(
+      "TelemetryLogger",
+      Date.now() - telemetryInitStart,
+      true,
+      { log_file: telemetry.getLogFilePath() }
+    );
+    console.error(`Telemetry logging to: ${telemetry.getLogFilePath()}`);
+  } catch (error) {
+    console.error("Failed to initialize telemetry:", error);
+    // Continue without telemetry
+  }
+
   // Initialize search service
-  await searchService.initialize();
+  const searchInitStart = Date.now();
+  try {
+    await searchService.initialize();
+    await telemetry.logServiceInit(
+      "SearchService",
+      Date.now() - searchInitStart,
+      true,
+      { chunks_loaded: searchService.getChunkCount() }
+    );
+  } catch (error) {
+    await telemetry.logServiceInit(
+      "SearchService",
+      Date.now() - searchInitStart,
+      false,
+      { error: error instanceof Error ? error.message : String(error) }
+    );
+    throw error;
+  }
 
   // Start server
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
   console.error("IWSDK RAG MCP Server is ready");
+  console.error(`Session ID: ${telemetry.getSessionId()}`);
+
+  // Handle graceful shutdown
+  const handleShutdown = async () => {
+    console.error("Shutting down...");
+    const stats = telemetry.getStats();
+    console.error(
+      `Session stats: ${stats.toolCalls} tool calls, ${stats.errors} errors`
+    );
+    await shutdownTelemetry();
+    process.exit(0);
+  };
+
+  process.on("SIGINT", handleShutdown);
+  process.on("SIGTERM", handleShutdown);
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
   console.error("Fatal error:", error);
+  await telemetry.logSystemError(
+    error instanceof Error ? error.message : String(error),
+    error instanceof Error ? error.stack : undefined,
+    { context: "main" }
+  );
+  await shutdownTelemetry();
   process.exit(1);
 });

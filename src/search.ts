@@ -258,4 +258,11 @@ export class SearchService {
   getAllChunks(): Chunk[] {
     return this.chunks;
   }
+
+  /**
+   * Get the number of loaded chunks
+   */
+  getChunkCount(): number {
+    return this.chunks.length;
+  }
 }
