@@ -5,12 +5,12 @@
 export interface TypeScriptChunk {
   // Core properties
   content: string;
-  chunk_type: 'function' | 'class' | 'interface' | 'type' | 'enum' | 'method' | 'const' | 'variable' | 'component' | 'system' | 'uikitml' | 'example';
+  chunk_type: 'function' | 'class' | 'interface' | 'type' | 'enum' | 'method' | 'const' | 'variable' | 'component' | 'system';
   name: string;
   start_line: number;
   end_line: number;
   file_path: string;
-  language: 'typescript' | 'javascript' | 'uikitml';
+  language: 'typescript' | 'javascript';
 
   // TypeScript-specific
   module_path?: string;  // npm package name
@@ -36,5 +36,5 @@ export interface TypeScriptChunk {
   semantic_labels: string[];
 
   // Source metadata (added during export)
-  source?: 'iwsdk' | 'elics' | 'deps' | 'threejs';
+  source?: 'iwsdk' | 'elics' | 'deps';
 }

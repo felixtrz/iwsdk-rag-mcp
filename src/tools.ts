@@ -75,12 +75,12 @@ function getSourceHints(results: Chunk[], query: string): string {
   const queryLower = query.toLowerCase();
   const hints: string[] = [];
 
-  // Three.js related queries
+  // Three.js related queries (types are in deps via @types/three)
   if (queryLower.includes('material') || queryLower.includes('mesh') ||
       queryLower.includes('geometry') || queryLower.includes('vector') ||
       queryLower.includes('scene') || queryLower.includes('renderer')) {
-    if (!sourceCounts.has('threejs') || sourceCounts.get('threejs')! < 3) {
-      hints.push('For Three.js specifics, try: `source: ["threejs"]`');
+    if (!sourceCounts.has('deps') || sourceCounts.get('deps')! < 3) {
+      hints.push('For Three.js types, try: `source: ["deps"]`');
     }
   }
 
@@ -244,8 +244,7 @@ export async function searchCode(
     const results = await searchService.search(args.query, {
       limit: requestLimit,
       source_filter: args.source,
-      min_score: args.min_score ?? 0.0,
-      boost_iwsdk: true  // Apply source priority weighting
+      min_score: args.min_score ?? 0.0
     });
 
     if (results.length === 0) {
@@ -432,7 +431,7 @@ export async function getFileContent(
   fileService: FileService,
   args: {
     file_path: string;
-    source: 'iwsdk' | 'elics' | 'deps' | 'threejs';
+    source: 'iwsdk' | 'elics' | 'deps';
     start_line?: number;
     end_line?: number;
   }
