@@ -28,33 +28,55 @@ function toArray(value: any): string[] {
 }
 
 /**
- * Deduplicate chunks by file_path and overlapping line ranges
- * Keeps the first occurrence when there's overlap
+ * Deduplicate by file_path and overlapping line ranges.
+ * Works on both wrapped results ({ chunk: Chunk }) and bare Chunk arrays.
  */
-function deduplicateChunks<T extends { chunk: Chunk }>(results: T[]): T[] {
+function deduplicateByLineRange<T>(items: T[], getChunk: (item: T) => Chunk): T[] {
   const seen = new Map<string, Array<[number, number]>>();
   const deduplicated: T[] = [];
 
-  for (const result of results) {
-    const chunk = result.chunk;
+  for (const item of items) {
+    const chunk = getChunk(item);
     const key = chunk.metadata.file_path;
     const start = chunk.metadata.start_line;
     const end = chunk.metadata.end_line;
 
-    // Check for overlap with existing entries for this file
     const existingRanges = seen.get(key) || [];
     const hasOverlap = existingRanges.some(([existStart, existEnd]) =>
-      !(end < existStart || start > existEnd) // NOT (completely before OR completely after)
+      !(end < existStart || start > existEnd)
     );
 
     if (!hasOverlap) {
-      deduplicated.push(result);
+      deduplicated.push(item);
       existingRanges.push([start, end]);
       seen.set(key, existingRanges);
     }
   }
 
   return deduplicated;
+}
+
+/**
+ * Deduplicate chunks by name, preferring core SDK paths (packages/) over examples.
+ * Used by listing tools where the same component/system may exist in multiple locations.
+ */
+function deduplicateByName(chunks: Chunk[]): Chunk[] {
+  const seen = new Map<string, Chunk>();
+  for (const chunk of chunks) {
+    const name = chunk.metadata.name;
+    const existing = seen.get(name);
+    if (!existing) {
+      seen.set(name, chunk);
+    } else {
+      // Prefer packages/ over examples/
+      const existingIsCore = existing.metadata.file_path.startsWith('packages/');
+      const newIsCore = chunk.metadata.file_path.startsWith('packages/');
+      if (newIsCore && !existingIsCore) {
+        seen.set(name, chunk);
+      }
+    }
+  }
+  return Array.from(seen.values());
 }
 
 /**
@@ -258,7 +280,7 @@ export async function searchCode(
     }
 
     // Deduplicate by file_path + line range
-    const deduplicated = deduplicateChunks(results);
+    const deduplicated = deduplicateByLineRange(results, r => r.chunk);
 
     // Apply final limit
     const finalResults = deduplicated.slice(0, args.limit ?? 10);
@@ -315,11 +337,14 @@ export async function findByRelationship(
   }
 ): Promise<ToolResult> {
   try {
-    const results = searchService.findByRelationship({
+    const rawResults = searchService.findByRelationship({
       type: args.type,
       target: args.target,
       limit: args.limit ?? 20
     });
+
+    // Deduplicate overlapping chunks
+    const results = deduplicateByLineRange(rawResults, c => c);
 
     if (results.length === 0) {
       const typeLabel = args.type.replace('_', ' ');
@@ -377,10 +402,13 @@ export async function getApiReference(
   }
 ): Promise<ToolResult> {
   try {
-    const results = searchService.getByName(args.name, {
+    const rawResults = searchService.getByName(args.name, {
       chunk_type: args.type,
       source_filter: args.source
     });
+
+    // Deduplicate overlapping chunks (e.g., const + component for same code)
+    const results = deduplicateByLineRange(rawResults, c => c);
 
     if (results.length === 0) {
       return {
@@ -503,6 +531,17 @@ export async function listEcsComponents(
       return chunk.metadata.ecs_component === true;
     });
 
+    // Deduplicate: by line range, then by name (prefer packages/ over examples/)
+    components = deduplicateByLineRange(components, c => c);
+    components = deduplicateByName(components);
+
+    // Sort: core SDK (packages/) first, then examples
+    components.sort((a, b) => {
+      const aCore = a.metadata.file_path.startsWith('packages/') ? 0 : 1;
+      const bCore = b.metadata.file_path.startsWith('packages/') ? 0 : 1;
+      return aCore - bCore;
+    });
+
     // Apply source filter
     if (args.source && args.source.length > 0) {
       components = components.filter(chunk => args.source!.includes(chunk.metadata.source));
@@ -576,6 +615,17 @@ export async function listEcsSystems(
     // Filter for ECS systems - trust the parser's metadata flags
     let systems = allChunks.filter(chunk => {
       return chunk.metadata.ecs_system === true;
+    });
+
+    // Deduplicate: by line range, then by name (prefer packages/ over examples/)
+    systems = deduplicateByLineRange(systems, c => c);
+    systems = deduplicateByName(systems);
+
+    // Sort: core SDK (packages/) first, then examples
+    systems.sort((a, b) => {
+      const aCore = a.metadata.file_path.startsWith('packages/') ? 0 : 1;
+      const bCore = b.metadata.file_path.startsWith('packages/') ? 0 : 1;
+      return aCore - bCore;
     });
 
     // Apply source filter
@@ -683,13 +733,13 @@ export async function findDependents(
 
       if (matches) {
         dependents.push(chunk);
-        if (dependents.length >= limit) {
-          break;
-        }
       }
     }
 
-    if (dependents.length === 0) {
+    // Deduplicate overlapping chunks, then apply limit
+    const deduplicated = deduplicateByLineRange(dependents, c => c).slice(0, limit);
+
+    if (deduplicated.length === 0) {
       return {
         content: [{
           type: 'text',
@@ -701,10 +751,10 @@ export async function findDependents(
     const output: string[] = [];
     output.push(`# Code that depends on: "${args.api_name}"`);
     output.push('');
-    output.push(`Found ${dependents.length} dependents:`);
+    output.push(`Found ${deduplicated.length} dependents:`);
     output.push('');
 
-    for (const chunk of dependents) {
+    for (const chunk of deduplicated) {
       output.push(formatChunk(chunk));
       output.push('');
       output.push('---');
@@ -808,8 +858,8 @@ export async function findUsageExamples(
     // Sort by score (highest first)
     examples.sort((a, b) => b.score - a.score);
 
-    // Take top N
-    const topExamples = examples.slice(0, limit);
+    // Deduplicate overlapping chunks, then take top N
+    const topExamples = deduplicateByLineRange(examples, e => e.chunk).slice(0, limit);
 
     if (topExamples.length === 0) {
       return {
