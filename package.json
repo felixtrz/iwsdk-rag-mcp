@@ -1,6 +1,6 @@
 {
   "name": "@felixtz/iwsdk-rag-mcp",
-  "version": "0.2.0-alpha.0",
+  "version": "0.3.0",
   "description": "MCP server providing semantic code search and API reference for the Immersive Web SDK using RAG (Retrieval-Augmented Generation) with vector embeddings",
   "main": "dist/index.js",
   "bin": {
