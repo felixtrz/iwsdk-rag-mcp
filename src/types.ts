@@ -62,6 +62,7 @@ export interface EmbeddingsData {
   dimensions: number;
   iwsdk: RawChunk[];
   deps: RawChunk[];
+  threejs?: RawChunk[];
 }
 
 // Legacy chunks.json format (for backward compatibility)

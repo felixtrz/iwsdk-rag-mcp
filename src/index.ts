@@ -70,12 +70,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "array",
               items: { type: "string" },
               description:
-                'Filter by source: ["iwsdk", "elics", "deps"]. Omit to search all sources.',
+                'Filter by source: ["iwsdk", "elics", "deps", "threejs"]. Omit to search all sources.',
             },
             min_score: {
               type: "number",
               description: "Minimum similarity score (0.0-1.0, default: 0.0)",
               default: 0.0,
+            },
+            verbosity: {
+              type: "number",
+              description: "Content verbosity level: 0=metadata only, 1=first 10 lines, 2=first 30 lines, 3=full content (default: 3)",
+              default: 3,
             },
           },
           required: ["query"],
@@ -134,7 +139,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "array",
               items: { type: "string" },
               description:
-                'Filter by source: ["iwsdk", "elics", "deps"]. Omit to search all sources.',
+                'Filter by source: ["iwsdk", "elics", "deps", "threejs"]. Omit to search all sources.',
             },
           },
           required: ["name"],
@@ -154,7 +159,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             source: {
               type: "string",
-              enum: ["iwsdk", "elics", "deps"],
+              enum: ["iwsdk", "elics", "deps", "threejs"],
               description: "Source of the file",
             },
             start_line: {

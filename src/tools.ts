@@ -28,9 +28,112 @@ function toArray(value: any): string[] {
 }
 
 /**
+ * Deduplicate chunks by file_path and overlapping line ranges
+ * Keeps the first occurrence when there's overlap
+ */
+function deduplicateChunks<T extends { chunk: Chunk }>(results: T[]): T[] {
+  const seen = new Map<string, Array<[number, number]>>();
+  const deduplicated: T[] = [];
+
+  for (const result of results) {
+    const chunk = result.chunk;
+    const key = chunk.metadata.file_path;
+    const start = chunk.metadata.start_line;
+    const end = chunk.metadata.end_line;
+
+    // Check for overlap with existing entries for this file
+    const existingRanges = seen.get(key) || [];
+    const hasOverlap = existingRanges.some(([existStart, existEnd]) =>
+      !(end < existStart || start > existEnd) // NOT (completely before OR completely after)
+    );
+
+    if (!hasOverlap) {
+      deduplicated.push(result);
+      existingRanges.push([start, end]);
+      seen.set(key, existingRanges);
+    }
+  }
+
+  return deduplicated;
+}
+
+/**
+ * Generate source filtering hints based on search results
+ */
+function getSourceHints(results: Chunk[], query: string): string {
+  if (results.length === 0) {
+    return '\n**Tip**: Try searching without source filters to see all available results.';
+  }
+
+  const sourceCounts = new Map<string, number>();
+  for (const chunk of results) {
+    const source = chunk.metadata.source;
+    sourceCounts.set(source, (sourceCounts.get(source) || 0) + 1);
+  }
+
+  // Detect patterns in the query
+  const queryLower = query.toLowerCase();
+  const hints: string[] = [];
+
+  // Three.js related queries
+  if (queryLower.includes('material') || queryLower.includes('mesh') ||
+      queryLower.includes('geometry') || queryLower.includes('vector') ||
+      queryLower.includes('scene') || queryLower.includes('renderer')) {
+    if (!sourceCounts.has('threejs') || sourceCounts.get('threejs')! < 3) {
+      hints.push('For Three.js specifics, try: `source: ["threejs"]`');
+    }
+  }
+
+  // ECS related queries
+  if (queryLower.includes('component') || queryLower.includes('system') ||
+      queryLower.includes('entity') || queryLower.includes('query')) {
+    if (!sourceCounts.has('iwsdk') || sourceCounts.get('iwsdk')! < 3) {
+      hints.push('For ECS patterns, try: `source: ["iwsdk"]`');
+    }
+  }
+
+  // WebXR related queries
+  if (queryLower.includes('xr') || queryLower.includes('controller') ||
+      queryLower.includes('vr') || queryLower.includes('ar')) {
+    hints.push('For WebXR types, try: `source: ["deps"]`');
+  }
+
+  if (hints.length > 0) {
+    return '\n\n**Source filtering hints**:\n' + hints.map(h => `- ${h}`).join('\n');
+  }
+
+  return '';
+}
+
+/**
+ * Summarize chunk content based on verbosity level
+ * 0 = metadata only, 1 = first 10 lines, 2 = first 30 lines, 3 = full content
+ */
+function summarizeContent(content: string, verbosity: number = 3): string {
+  if (verbosity >= 3) {
+    return content;
+  }
+
+  const lines = content.split('\n');
+
+  if (verbosity === 0) {
+    return `[${lines.length} lines - use verbosity 1+ to see content]`;
+  }
+
+  const maxLines = verbosity === 1 ? 10 : 30;
+
+  if (lines.length <= maxLines) {
+    return content;
+  }
+
+  const truncated = lines.slice(0, maxLines).join('\n');
+  return truncated + `\n\n// ... ${lines.length - maxLines} more lines (increase verbosity to see more)`;
+}
+
+/**
  * Format a chunk for display
  */
-function formatChunk(chunk: Chunk, score?: number): string {
+function formatChunk(chunk: Chunk, score?: number, verbosity: number = 3): string {
   const lines: string[] = [];
 
   // Header with score if provided
@@ -78,9 +181,9 @@ function formatChunk(chunk: Chunk, score?: number): string {
 
   lines.push('');
 
-  // Code content
+  // Code content with summarization
   lines.push('```typescript');
-  lines.push(chunk.content);
+  lines.push(summarizeContent(chunk.content, verbosity));
   lines.push('```');
 
   return lines.join('\n');
@@ -99,6 +202,7 @@ export async function searchCode(
     limit?: number;
     source?: string[];
     min_score?: number;
+    verbosity?: number;
   }
 ): Promise<ToolResult> {
   // Input validation
@@ -132,33 +236,51 @@ export async function searchCode(
     };
   }
 
+  const verbosity = args.verbosity ?? 3;
+
   try {
+    // Request more results than needed for deduplication
+    const requestLimit = Math.min((args.limit ?? 10) * 2, 100);
     const results = await searchService.search(args.query, {
-      limit: args.limit ?? 10,
+      limit: requestLimit,
       source_filter: args.source,
-      min_score: args.min_score ?? 0.0
+      min_score: args.min_score ?? 0.0,
+      boost_iwsdk: true  // Apply source priority weighting
     });
 
     if (results.length === 0) {
+      const hint = getSourceHints([], args.query);
       return {
         content: [{
           type: 'text',
-          text: `No results found for query: "${args.query}"`
+          text: `No results found for query: "${args.query}"${hint}`
         }]
       };
     }
 
+    // Deduplicate by file_path + line range
+    const deduplicated = deduplicateChunks(results);
+
+    // Apply final limit
+    const finalResults = deduplicated.slice(0, args.limit ?? 10);
+
     const output: string[] = [];
     output.push(`# Search Results for: "${args.query}"`);
     output.push('');
-    output.push(`Found ${results.length} relevant code chunks:`);
+    output.push(`Found ${finalResults.length} relevant code chunks:`);
     output.push('');
 
-    for (const result of results) {
-      output.push(formatChunk(result.chunk, result.score));
+    for (const result of finalResults) {
+      output.push(formatChunk(result.chunk, result.score, verbosity));
       output.push('');
       output.push('---');
       output.push('');
+    }
+
+    // Add source filtering hints
+    const hints = getSourceHints(finalResults.map(r => r.chunk), args.query);
+    if (hints) {
+      output.push(hints);
     }
 
     return {
@@ -310,7 +432,7 @@ export async function getFileContent(
   fileService: FileService,
   args: {
     file_path: string;
-    source: 'iwsdk' | 'elics' | 'deps';
+    source: 'iwsdk' | 'elics' | 'deps' | 'threejs';
     start_line?: number;
     end_line?: number;
   }

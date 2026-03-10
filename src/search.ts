@@ -48,12 +48,14 @@ export class SearchService {
       // Transform raw chunks into Chunk objects
       this.chunks = [
         ...data.iwsdk.map((raw, idx) => this.rawChunkToChunk(raw, `iwsdk_${idx}`)),
-        ...data.deps.map((raw, idx) => this.rawChunkToChunk(raw, `deps_${idx}`))
+        ...data.deps.map((raw, idx) => this.rawChunkToChunk(raw, `deps_${idx}`)),
+        ...(data.threejs || []).map((raw, idx) => this.rawChunkToChunk(raw, `threejs_${idx}`))
       ];
 
       console.error(`Loaded ${this.chunks.length} chunks using ${data.model}`);
       console.error(`  - iwsdk: ${data.iwsdk.length} chunks`);
       console.error(`  - deps: ${data.deps.length} chunks`);
+      console.error(`  - threejs: ${(data.threejs || []).length} chunks`);
       console.error(`  - embedding dimensions: ${data.dimensions}`);
     } catch (error) {
       // Fall back to legacy format
@@ -109,6 +111,7 @@ export class SearchService {
     limit?: number;
     source_filter?: string[];
     min_score?: number;
+    boost_iwsdk?: boolean;
   } = {}): Promise<SearchResult[]> {
     if (!this.initialized) {
       throw new Error('Search service not initialized. Call initialize() first.');
@@ -116,6 +119,7 @@ export class SearchService {
 
     const limit = options.limit ?? 10;
     const minScore = options.min_score ?? 0.0;
+    const boostIwsdk = options.boost_iwsdk ?? false;
 
     // Generate query embedding
     const queryEmbedding = await this.embeddingService.embed(query);
@@ -128,11 +132,23 @@ export class SearchService {
       );
     }
 
-    // Calculate similarity scores
-    const results: SearchResult[] = searchableChunks.map(chunk => ({
-      chunk,
-      score: cosineSimilarity(queryEmbedding, chunk.embedding)
-    }));
+    // Calculate similarity scores with optional source priority boost
+    const results: SearchResult[] = searchableChunks.map(chunk => {
+      let score = cosineSimilarity(queryEmbedding, chunk.embedding);
+
+      // Apply source priority weighting for IWSDK developers
+      // IWSDK code should rank slightly higher than deps/threejs for similar scores
+      if (boostIwsdk && !options.source_filter) {
+        if (chunk.metadata.source === 'iwsdk') {
+          score *= 1.05;  // 5% boost for IWSDK source
+        } else if (chunk.metadata.source === 'deps') {
+          score *= 0.95;  // 5% penalty for deps (usually just type definitions)
+        }
+        // threejs keeps original score (it's useful reference)
+      }
+
+      return { chunk, score };
+    });
 
     // Filter by minimum score and sort by score descending
     return results
