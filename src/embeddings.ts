@@ -22,7 +22,9 @@ export class EmbeddingService {
     }
 
     console.error('Loading embedding model...');
-    this.extractor = await pipeline('feature-extraction', this.modelName);
+    this.extractor = await pipeline('feature-extraction', this.modelName, {
+      dtype: 'q8',
+    });
     console.error('Embedding model loaded successfully');
   }
 
