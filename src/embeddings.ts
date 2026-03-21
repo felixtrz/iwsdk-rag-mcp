@@ -1,29 +1,44 @@
 /**
  * Embedding service using transformers.js
  *
- * Uses code-specialized model: jinaai/jina-embeddings-v2-base-code
+ * Uses code-specialized model: jinaai/jina-embeddings-v2-base-code (q8)
  * - Trained on 30+ programming languages
- * - 8192 token context length
- * - Better semantic understanding for code search
+ * - 768-dimensional embeddings, 8192 token context
+ * - Model bundled locally to avoid download issues
  */
 
 import { pipeline, env } from '@huggingface/transformers';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-// Disable local model caching in production
-env.allowLocalModels = false;
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Resolve bundled model path relative to package root
+function getModelPath(): string {
+  // In dist/, go up one level to reach package root
+  return resolve(__dirname, '..', 'model');
+}
 
 export class EmbeddingService {
   private extractor: any = null;
   private modelName = 'jinaai/jina-embeddings-v2-base-code';
+
+  getModelName(): string {
+    return this.modelName;
+  }
 
   async initialize(): Promise<void> {
     if (this.extractor) {
       return;
     }
 
-    console.error('Loading embedding model...');
-    this.extractor = await pipeline('feature-extraction', this.modelName, {
+    const modelPath = getModelPath();
+    env.allowLocalModels = true;
+
+    console.error(`Loading embedding model from ${modelPath}...`);
+    this.extractor = await pipeline('feature-extraction', modelPath, {
       dtype: 'q8',
+      local_files_only: true,
     });
     console.error('Embedding model loaded successfully');
   }
@@ -33,13 +48,9 @@ export class EmbeddingService {
       throw new Error('Embedding service not initialized. Call initialize() first.');
     }
 
-    // Generate embedding
     const output = await this.extractor(text, { pooling: 'mean', normalize: true });
 
-    // Convert to regular array
-    const embedding = Array.from(output.data as Float32Array);
-
-    return embedding;
+    return Array.from(output.data as Float32Array);
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
@@ -47,7 +58,6 @@ export class EmbeddingService {
       throw new Error('Embedding service not initialized. Call initialize() first.');
     }
 
-    // Process all texts
     const embeddings: number[][] = [];
     for (const text of texts) {
       const embedding = await this.embed(text);
