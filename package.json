@@ -15,6 +15,7 @@
     "test": "node test/compare_results.js",
     "prepare": "npm run build",
     "ingest": "npm run build:tools && node dist-tools/tools/ingest.js",
+    "preload": "node dist/index.js --preload",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },

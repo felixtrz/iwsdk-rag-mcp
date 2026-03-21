@@ -32,7 +32,6 @@ class MCPTestClient {
       clientInfo: { name: 'test-client', version: '1.0.0' },
     });
     this.notify('notifications/initialized', {});
-    await new Promise((r) => setTimeout(r, 5000));
   }
 
   processBuffer() {

@@ -51,7 +51,7 @@ export class EmbeddingService {
       dtype: 'q8',
       local_files_only: true,
     });
-    console.error('Embedding model loaded successfully');
+    console.error(JSON.stringify({ event: 'model_loaded', model: this.modelName, timestamp: Date.now() }));
   }
 
   async embed(text: string): Promise<number[]> {

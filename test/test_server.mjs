@@ -42,8 +42,6 @@ class MCPTestClient {
     // Send initialized notification
     this.notify('notifications/initialized', {});
 
-    // Wait for server to be ready
-    await new Promise((r) => setTimeout(r, 5000));
   }
 
   processBuffer() {

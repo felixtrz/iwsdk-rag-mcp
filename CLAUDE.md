@@ -17,6 +17,7 @@ Without `git lfs pull`, the model file will be a LFS pointer and the server will
 ```sh
 pnpm build            # Compile MCP server → dist/
 pnpm build:tools      # Compile ingestion pipeline → dist-tools/
+pnpm preload          # Load ONNX model, confirm readiness, exit
 pnpm lint             # Run ESLint
 pnpm lint:fix         # Auto-fix lint issues
 pnpm start            # Run the MCP server (stdio transport)
@@ -84,6 +85,22 @@ test/
 4. Returns formatted markdown via MCP tool responses
 
 **Key type transformation**: `RawChunk` (flat, from JSON) → `Chunk` (nested `metadata` object) via `SearchService.rawChunkToChunk()`. Note `class_name` becomes `class_context` in metadata.
+
+## Readiness Detection
+
+The ONNX transformer model (~162 MB) takes several seconds to load. Three mechanisms exist for detecting readiness:
+
+**`--preload` flag** (recommended for external projects): Loads the model, prints a JSON confirmation to stdout, and exits. Use in npm scripts to block until the model is warm:
+```sh
+iwsdk-rag-mcp --preload && <start other stuff>
+```
+Stdout output: `{"event":"preload_complete","model":"jinaai/jina-embeddings-v2-base-code","timestamp":...}`
+
+**MCP clients**: The `initialize` handshake response *is* the readiness signal. The server calls `await searchService.initialize()` before `server.connect(transport)`, so it doesn't accept MCP connections until the model is fully loaded.
+
+**Structured stderr events**: The server emits JSON lines on stderr during startup:
+- `{"event":"model_loaded",...}` — ONNX model loaded
+- `{"event":"ready",...}` — server fully initialized and accepting connections
 
 ## Coding Conventions
 

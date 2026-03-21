@@ -18,6 +18,7 @@ import {
   CallToolResult,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { EmbeddingService } from "./embeddings.js";
 import { FileService } from "./files.js";
 import { SearchService } from "./search.js";
 import { findByRelationship, findDependents, findUsageExamples, getApiReference, getFileContent, listEcsComponents, listEcsSystems, searchCode } from "./tools.js";
@@ -345,6 +346,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // Main function
 async function main() {
+  const args = process.argv.slice(2);
+
+  if (args.includes('--preload')) {
+    console.error('Preloading embedding model...');
+    const embeddingService = new EmbeddingService();
+    await embeddingService.initialize();
+    console.log(JSON.stringify({ event: 'preload_complete', model: embeddingService.getModelName(), timestamp: Date.now() }));
+    process.exit(0);
+  }
+
   console.error("Starting IWSDK RAG MCP Server...");
 
   // Initialize search service
@@ -354,7 +365,7 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  console.error("IWSDK RAG MCP Server is ready");
+  console.error(JSON.stringify({ event: "ready", server: "iwsdk-rag-mcp", version, timestamp: Date.now() }));
 }
 
 main().catch((error) => {
