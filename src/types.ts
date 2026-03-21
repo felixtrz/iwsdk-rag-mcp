@@ -18,11 +18,18 @@ export interface ChunkMetadata {
   webxr_api_usage?: string[];
   ecs_component?: boolean;
   ecs_system?: boolean;
+  // Pre-lowercased relationship arrays for fast case-insensitive comparison
+  _extendsLower: string[];
+  _implementsLower: string[];
+  _importsLower: string[];
+  _callsLower: string[];
+  _webxrApiUsageLower: string[];
 }
 
 export interface Chunk {
   id: string;
   content: string;
+  contentLower: string;
   metadata: ChunkMetadata;
   embedding: number[];
 }
@@ -87,5 +94,50 @@ export interface SearchResult {
 export interface RelationshipQuery {
   type: 'extends' | 'implements' | 'imports' | 'calls' | 'uses_webxr_api';
   target: string;
+  limit?: number;
+}
+
+// Tool argument types
+
+export interface SearchCodeArgs {
+  query: string;
+  limit?: number;
+  source?: string[];
+  min_score?: number;
+  verbosity?: number;
+}
+
+export interface FindByRelationshipArgs {
+  type: 'extends' | 'implements' | 'imports' | 'calls' | 'uses_webxr_api';
+  target: string;
+  limit?: number;
+}
+
+export interface GetApiReferenceArgs {
+  name: string;
+  type?: 'class' | 'function' | 'interface' | 'type';
+  source?: string[];
+}
+
+export interface GetFileContentArgs {
+  file_path: string;
+  source: 'iwsdk' | 'elics' | 'deps';
+  start_line?: number;
+  end_line?: number;
+}
+
+export interface ListEcsArgs {
+  source?: string[];
+  limit?: number;
+}
+
+export interface FindDependentsArgs {
+  api_name: string;
+  dependency_type?: 'imports' | 'calls' | 'extends' | 'implements' | 'any';
+  limit?: number;
+}
+
+export interface FindUsageExamplesArgs {
+  api_name: string;
   limit?: number;
 }

@@ -22,6 +22,7 @@ import { EmbeddingService } from "./embeddings.js";
 import { FileService } from "./files.js";
 import { SearchService } from "./search.js";
 import { findByRelationship, findDependents, findUsageExamples, getApiReference, getFileContent, listEcsComponents, listEcsSystems, searchCode } from "./tools.js";
+import type { FindByRelationshipArgs, FindDependentsArgs, FindUsageExamplesArgs, GetApiReferenceArgs, GetFileContentArgs, ListEcsArgs, SearchCodeArgs } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const { version } = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8"));
@@ -269,53 +270,54 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+  const { name, arguments: rawArgs } = request.params;
+  const args = rawArgs as unknown;
 
   try {
     switch (name) {
       case "search_code":
-        return (await searchCode(searchService, args as any)) as CallToolResult;
+        return (await searchCode(searchService, args as SearchCodeArgs)) as CallToolResult;
 
       case "find_by_relationship":
         return (await findByRelationship(
           searchService,
-          args as any
+          args as FindByRelationshipArgs
         )) as CallToolResult;
 
       case "get_api_reference":
         return (await getApiReference(
           searchService,
-          args as any
+          args as GetApiReferenceArgs
         )) as CallToolResult;
 
       case "get_file_content":
         return (await getFileContent(
           fileService,
-          args as any
+          args as GetFileContentArgs
         )) as CallToolResult;
 
       case "list_ecs_components":
         return (await listEcsComponents(
           searchService,
-          args as any
+          args as ListEcsArgs
         )) as CallToolResult;
 
       case "list_ecs_systems":
         return (await listEcsSystems(
           searchService,
-          args as any
+          args as ListEcsArgs
         )) as CallToolResult;
 
       case "find_dependents":
         return (await findDependents(
           searchService,
-          args as any
+          args as FindDependentsArgs
         )) as CallToolResult;
 
       case "find_usage_examples":
         return (await findUsageExamples(
           searchService,
-          args as any
+          args as FindUsageExamplesArgs
         )) as CallToolResult;
 
       default:

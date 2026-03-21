@@ -16,6 +16,9 @@ export class SearchService {
   private chunks: Chunk[] = [];
   private embeddingService: EmbeddingService;
   private initialized = false;
+  private searchCache = new Map<string, { results: SearchResult[]; timestamp: number }>();
+  private readonly CACHE_MAX_SIZE = 100;
+  private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
   constructor() {
     this.embeddingService = new EmbeddingService();
@@ -72,6 +75,7 @@ export class SearchService {
     return {
       id,
       content: raw.content,
+      contentLower: raw.content.toLowerCase(),
       embedding: raw.embedding,
       metadata: {
         source: raw.source,
@@ -89,6 +93,11 @@ export class SearchService {
         webxr_api_usage: raw.webxr_api_usage,
         ecs_component: raw.ecs_component,
         ecs_system: raw.ecs_system,
+        _extendsLower: toArray(raw.extends).map(s => s.toLowerCase()),
+        _implementsLower: toArray(raw.implements).map(s => s.toLowerCase()),
+        _importsLower: toArray(raw.imports).map(s => s.toLowerCase()),
+        _callsLower: toArray(raw.calls).map(s => s.toLowerCase()),
+        _webxrApiUsageLower: toArray(raw.webxr_api_usage).map(s => s.toLowerCase()),
       }
     };
   }
@@ -108,6 +117,13 @@ export class SearchService {
     const limit = options.limit ?? 10;
     const minScore = options.min_score ?? 0.0;
 
+    // Check cache
+    const cacheKey = `${query}|${JSON.stringify(options)}`;
+    const cached = this.searchCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL_MS) {
+      return cached.results;
+    }
+
     // Generate query embedding
     const queryEmbedding = await this.embeddingService.embed(query);
 
@@ -126,10 +142,21 @@ export class SearchService {
     }));
 
     // Filter by minimum score and sort by score descending
-    return results
+    const finalResults = results
       .filter(result => result.score >= minScore)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
+
+    // Cache results
+    if (this.searchCache.size >= this.CACHE_MAX_SIZE) {
+      const oldest = this.searchCache.keys().next().value;
+      if (oldest !== undefined) {
+        this.searchCache.delete(oldest);
+      }
+    }
+    this.searchCache.set(cacheKey, { results: finalResults, timestamp: Date.now() });
+
+    return finalResults;
   }
 
   /**
@@ -141,6 +168,7 @@ export class SearchService {
     }
 
     const limit = query.limit ?? 20;
+    const targetLower = query.target.toLowerCase();
     const results: Chunk[] = [];
 
     for (const chunk of this.chunks) {
@@ -148,33 +176,23 @@ export class SearchService {
 
       switch (query.type) {
         case 'extends':
-          matches = toArray(chunk.metadata.extends).some(e =>
-            e.toLowerCase().includes(query.target.toLowerCase())
-          );
+          matches = chunk.metadata._extendsLower.some(e => e.includes(targetLower));
           break;
 
         case 'implements':
-          matches = toArray(chunk.metadata.implements).some(i =>
-            i.toLowerCase().includes(query.target.toLowerCase())
-          );
+          matches = chunk.metadata._implementsLower.some(i => i.includes(targetLower));
           break;
 
         case 'imports':
-          matches = toArray(chunk.metadata.imports).some(imp =>
-            imp.toLowerCase().includes(query.target.toLowerCase())
-          );
+          matches = chunk.metadata._importsLower.some(imp => imp.includes(targetLower));
           break;
 
         case 'calls':
-          matches = toArray(chunk.metadata.calls).some(call =>
-            call.toLowerCase().includes(query.target.toLowerCase())
-          );
+          matches = chunk.metadata._callsLower.some(call => call.includes(targetLower));
           break;
 
         case 'uses_webxr_api':
-          matches = toArray(chunk.metadata.webxr_api_usage).some(api =>
-            api.toLowerCase().includes(query.target.toLowerCase())
-          );
+          matches = chunk.metadata._webxrApiUsageLower.some(api => api.includes(targetLower));
           break;
       }
 

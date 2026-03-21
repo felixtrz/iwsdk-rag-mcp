@@ -9,7 +9,7 @@
 
 import { FileService } from './files.js';
 import type { SearchService } from './search.js';
-import type { Chunk } from './types.js';
+import type { Chunk, FindByRelationshipArgs, FindDependentsArgs, FindUsageExamplesArgs, GetApiReferenceArgs, GetFileContentArgs, ListEcsArgs, SearchCodeArgs } from './types.js';
 import { toArray } from './utils.js';
 
 export interface ToolResult {
@@ -209,13 +209,7 @@ function formatChunk(chunk: Chunk, score?: number, verbosity: number = 3): strin
  */
 export async function searchCode(
   searchService: SearchService,
-  args: {
-    query: string;
-    limit?: number;
-    source?: string[];
-    min_score?: number;
-    verbosity?: number;
-  }
+  args: SearchCodeArgs
 ): Promise<ToolResult> {
   // Input validation
   if (!args.query || args.query.trim().length === 0) {
@@ -320,11 +314,7 @@ export async function searchCode(
  */
 export async function findByRelationship(
   searchService: SearchService,
-  args: {
-    type: 'extends' | 'implements' | 'imports' | 'calls' | 'uses_webxr_api';
-    target: string;
-    limit?: number;
-  }
+  args: FindByRelationshipArgs
 ): Promise<ToolResult> {
   try {
     const rawResults = searchService.findByRelationship({
@@ -385,11 +375,7 @@ export async function findByRelationship(
  */
 export async function getApiReference(
   searchService: SearchService,
-  args: {
-    name: string;
-    type?: 'class' | 'function' | 'interface' | 'type';
-    source?: string[];
-  }
+  args: GetApiReferenceArgs
 ): Promise<ToolResult> {
   try {
     const rawResults = searchService.getByName(args.name, {
@@ -447,12 +433,7 @@ export async function getApiReference(
  */
 export async function getFileContent(
   fileService: FileService,
-  args: {
-    file_path: string;
-    source: 'iwsdk' | 'elics' | 'deps';
-    start_line?: number;
-    end_line?: number;
-  }
+  args: GetFileContentArgs
 ): Promise<ToolResult> {
   try {
     const content = fileService.readFile(args.file_path, args.source, {
@@ -501,80 +482,87 @@ export async function getFileContent(
 }
 
 /**
- * Tool 5: list_ecs_components
- *
- * List all ECS components in the codebase.
- * Uses pattern detection: classes that extend "Component"
+ * Shared helper for listing ECS entities (components or systems).
  */
-export async function listEcsComponents(
+function listEcsEntities(
   searchService: SearchService,
-  args: {
-    source?: string[];
-    limit?: number;
+  args: ListEcsArgs,
+  options: { filterField: 'ecs_component' | 'ecs_system'; entityLabel: string; errorLabel: string }
+): ToolResult {
+  const allChunks = searchService.getAllChunks();
+
+  // Filter by metadata flag
+  let entities = allChunks.filter(chunk => chunk.metadata[options.filterField] === true);
+
+  // Deduplicate: by line range, then by name (prefer packages/ over examples/)
+  entities = deduplicateByLineRange(entities, c => c);
+  entities = deduplicateByName(entities);
+
+  // Sort: core SDK (packages/) first, then examples
+  entities.sort((a, b) => {
+    const aCore = a.metadata.file_path.startsWith('packages/') ? 0 : 1;
+    const bCore = b.metadata.file_path.startsWith('packages/') ? 0 : 1;
+    return aCore - bCore;
+  });
+
+  // Apply source filter
+  if (args.source && args.source.length > 0) {
+    entities = entities.filter(chunk => args.source!.includes(chunk.metadata.source));
   }
-): Promise<ToolResult> {
-  try {
-    const allChunks = searchService.getAllChunks();
 
-    // Filter for ECS components - trust the parser's metadata flags
-    let components = allChunks.filter(chunk => {
-      return chunk.metadata.ecs_component === true;
-    });
+  // Apply limit
+  const limit = args.limit ?? 100;
+  entities = entities.slice(0, limit);
 
-    // Deduplicate: by line range, then by name (prefer packages/ over examples/)
-    components = deduplicateByLineRange(components, c => c);
-    components = deduplicateByName(components);
-
-    // Sort: core SDK (packages/) first, then examples
-    components.sort((a, b) => {
-      const aCore = a.metadata.file_path.startsWith('packages/') ? 0 : 1;
-      const bCore = b.metadata.file_path.startsWith('packages/') ? 0 : 1;
-      return aCore - bCore;
-    });
-
-    // Apply source filter
-    if (args.source && args.source.length > 0) {
-      components = components.filter(chunk => args.source!.includes(chunk.metadata.source));
-    }
-
-    // Apply limit
-    const limit = args.limit ?? 100;
-    components = components.slice(0, limit);
-
-    if (components.length === 0) {
-      return {
-        content: [{
-          type: 'text',
-          text: 'No ECS components found'
-        }]
-      };
-    }
-
-    const output: string[] = [];
-    output.push(`# ECS Components`);
-    output.push('');
-    output.push(`Found ${components.length} ECS components:`);
-    output.push('');
-
-    for (const chunk of components) {
-      output.push(`## ${chunk.metadata.name}`);
-      output.push(`**Source**: ${chunk.metadata.source}`);
-      output.push(`**File**: ${chunk.metadata.file_path}:${chunk.metadata.start_line}`);
-
-      const extendsArr = toArray(chunk.metadata.extends);
-      if (extendsArr.length > 0) {
-        output.push(`**Extends**: ${extendsArr.join(', ')}`);
-      }
-
-      output.push('');
-    }
-
+  if (entities.length === 0) {
     return {
       content: [{
         type: 'text',
-        text: output.join('\n')
+        text: `No ${options.entityLabel} found`
       }]
     };
+  }
+
+  const output: string[] = [];
+  output.push(`# ${options.entityLabel}`);
+  output.push('');
+  output.push(`Found ${entities.length} ${options.entityLabel.toLowerCase()}:`);
+  output.push('');
+
+  for (const chunk of entities) {
+    output.push(`## ${chunk.metadata.name}`);
+    output.push(`**Source**: ${chunk.metadata.source}`);
+    output.push(`**File**: ${chunk.metadata.file_path}:${chunk.metadata.start_line}`);
+
+    const extendsArr = toArray(chunk.metadata.extends);
+    if (extendsArr.length > 0) {
+      output.push(`**Extends**: ${extendsArr.join(', ')}`);
+    }
+
+    output.push('');
+  }
+
+  return {
+    content: [{
+      type: 'text',
+      text: output.join('\n')
+    }]
+  };
+}
+
+/**
+ * Tool 5: list_ecs_components
+ */
+export async function listEcsComponents(
+  searchService: SearchService,
+  args: ListEcsArgs
+): Promise<ToolResult> {
+  try {
+    return listEcsEntities(searchService, args, {
+      filterField: 'ecs_component',
+      entityLabel: 'ECS Components',
+      errorLabel: 'components',
+    });
   } catch (error) {
     return {
       content: [{
@@ -588,79 +576,17 @@ export async function listEcsComponents(
 
 /**
  * Tool 6: list_ecs_systems
- *
- * List all ECS systems in the codebase.
- * Uses pattern detection: classes that extend "System"
  */
 export async function listEcsSystems(
   searchService: SearchService,
-  args: {
-    source?: string[];
-    limit?: number;
-  }
+  args: ListEcsArgs
 ): Promise<ToolResult> {
   try {
-    const allChunks = searchService.getAllChunks();
-
-    // Filter for ECS systems - trust the parser's metadata flags
-    let systems = allChunks.filter(chunk => {
-      return chunk.metadata.ecs_system === true;
+    return listEcsEntities(searchService, args, {
+      filterField: 'ecs_system',
+      entityLabel: 'ECS Systems',
+      errorLabel: 'systems',
     });
-
-    // Deduplicate: by line range, then by name (prefer packages/ over examples/)
-    systems = deduplicateByLineRange(systems, c => c);
-    systems = deduplicateByName(systems);
-
-    // Sort: core SDK (packages/) first, then examples
-    systems.sort((a, b) => {
-      const aCore = a.metadata.file_path.startsWith('packages/') ? 0 : 1;
-      const bCore = b.metadata.file_path.startsWith('packages/') ? 0 : 1;
-      return aCore - bCore;
-    });
-
-    // Apply source filter
-    if (args.source && args.source.length > 0) {
-      systems = systems.filter(chunk => args.source!.includes(chunk.metadata.source));
-    }
-
-    // Apply limit
-    const limit = args.limit ?? 100;
-    systems = systems.slice(0, limit);
-
-    if (systems.length === 0) {
-      return {
-        content: [{
-          type: 'text',
-          text: 'No ECS systems found'
-        }]
-      };
-    }
-
-    const output: string[] = [];
-    output.push(`# ECS Systems`);
-    output.push('');
-    output.push(`Found ${systems.length} ECS systems:`);
-    output.push('');
-
-    for (const chunk of systems) {
-      output.push(`## ${chunk.metadata.name}`);
-      output.push(`**Source**: ${chunk.metadata.source}`);
-      output.push(`**File**: ${chunk.metadata.file_path}:${chunk.metadata.start_line}`);
-
-      const extendsArr = toArray(chunk.metadata.extends);
-      if (extendsArr.length > 0) {
-        output.push(`**Extends**: ${extendsArr.join(', ')}`);
-      }
-
-      output.push('');
-    }
-
-    return {
-      content: [{
-        type: 'text',
-        text: output.join('\n')
-      }]
-    };
   } catch (error) {
     return {
       content: [{
@@ -680,44 +606,40 @@ export async function listEcsSystems(
  */
 export async function findDependents(
   searchService: SearchService,
-  args: {
-    api_name: string;
-    dependency_type?: 'imports' | 'calls' | 'extends' | 'implements' | 'any';
-    limit?: number;
-  }
+  args: FindDependentsArgs
 ): Promise<ToolResult> {
   try {
     const dependencyType = args.dependency_type ?? 'any';
     const limit = args.limit ?? 20;
     const allChunks = searchService.getAllChunks();
+    const apiNameLower = args.api_name.toLowerCase();
 
     const dependents: Chunk[] = [];
 
     for (const chunk of allChunks) {
       let matches = false;
-      const apiNameLower = args.api_name.toLowerCase();
 
       if (dependencyType === 'any' || dependencyType === 'imports') {
-        matches = matches || toArray(chunk.metadata.imports).some(imp =>
-          imp.toLowerCase().includes(apiNameLower)
+        matches = matches || chunk.metadata._importsLower.some(imp =>
+          imp.includes(apiNameLower)
         );
       }
 
       if (dependencyType === 'any' || dependencyType === 'calls') {
-        matches = matches || toArray(chunk.metadata.calls).some(call =>
-          call.toLowerCase().includes(apiNameLower)
+        matches = matches || chunk.metadata._callsLower.some(call =>
+          call.includes(apiNameLower)
         );
       }
 
       if (dependencyType === 'any' || dependencyType === 'extends') {
-        matches = matches || toArray(chunk.metadata.extends).some(ext =>
-          ext.toLowerCase().includes(apiNameLower)
+        matches = matches || chunk.metadata._extendsLower.some(ext =>
+          ext.includes(apiNameLower)
         );
       }
 
       if (dependencyType === 'any' || dependencyType === 'implements') {
-        matches = matches || toArray(chunk.metadata.implements).some(impl =>
-          impl.toLowerCase().includes(apiNameLower)
+        matches = matches || chunk.metadata._implementsLower.some(impl =>
+          impl.includes(apiNameLower)
         );
       }
 
@@ -776,10 +698,7 @@ export async function findDependents(
  */
 export async function findUsageExamples(
   searchService: SearchService,
-  args: {
-    api_name: string;
-    limit?: number;
-  }
+  args: FindUsageExamplesArgs
 ): Promise<ToolResult> {
   try {
     const limit = args.limit ?? 10;
@@ -797,25 +716,25 @@ export async function findUsageExamples(
       let score = 0;
 
       // Check if imports the API
-      const importsApi = toArray(chunk.metadata.imports).some(imp =>
-        imp.toLowerCase().includes(apiNameLower)
+      const importsApi = chunk.metadata._importsLower.some(imp =>
+        imp.includes(apiNameLower)
       );
 
       // Check if calls the API
-      const callsApi = toArray(chunk.metadata.calls).some(call =>
-        call.toLowerCase().includes(apiNameLower)
+      const callsApi = chunk.metadata._callsLower.some(call =>
+        call.includes(apiNameLower)
       );
 
       // Check if extends/implements the API
-      const extendsApi = toArray(chunk.metadata.extends).some(ext =>
-        ext.toLowerCase().includes(apiNameLower)
+      const extendsApi = chunk.metadata._extendsLower.some(ext =>
+        ext.includes(apiNameLower)
       );
-      const implementsApi = toArray(chunk.metadata.implements).some(impl =>
-        impl.toLowerCase().includes(apiNameLower)
+      const implementsApi = chunk.metadata._implementsLower.some(impl =>
+        impl.includes(apiNameLower)
       );
 
       // Check if mentioned in code content
-      const mentionedInCode = chunk.content.toLowerCase().includes(apiNameLower);
+      const mentionedInCode = chunk.contentLower.includes(apiNameLower);
 
       // Scoring:
       // - Imports + calls = 10 (actual usage)

@@ -64,36 +64,17 @@ export class EmbeddingService {
     return Array.from(output.data as Float32Array);
   }
 
-  async embedBatch(texts: string[]): Promise<number[][]> {
-    if (!this.extractor) {
-      throw new Error('Embedding service not initialized. Call initialize() first.');
-    }
-
-    const embeddings: number[][] = [];
-    for (const text of texts) {
-      const embedding = await this.embed(text);
-      embeddings.push(embedding);
-    }
-
-    return embeddings;
-  }
 }
 
-// Cosine similarity calculation
+/**
+ * Similarity for unit-normalized vectors (dot product only).
+ * All embeddings use normalize: true, so ||a|| = ||b|| = 1
+ * and cosine_sim(a,b) = a · b.
+ */
 export function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) {
-    throw new Error(`Vector dimension mismatch: ${a.length} vs ${b.length}`);
-  }
-
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-
+  let dot = 0;
   for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
+    dot += a[i] * b[i];
   }
-
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  return dot;
 }
