@@ -5,9 +5,9 @@
  * Much simpler and more powerful than tree-sitter!
  */
 
-import { Project, SourceFile, Node, SyntaxKind, ClassDeclaration, FunctionDeclaration, InterfaceDeclaration, TypeAliasDeclaration, EnumDeclaration, MethodDeclaration, PropertyDeclaration } from 'ts-morph';
-import { TypeScriptChunk } from './types.js';
 import * as path from 'path';
+import { Project, SourceFile, Node, SyntaxKind, ClassDeclaration, FunctionDeclaration, InterfaceDeclaration, TypeAliasDeclaration, EnumDeclaration, MethodDeclaration } from 'ts-morph';
+import { TypeScriptChunk } from './types.js';
 
 export class TypeScriptParser {
   private project: Project;

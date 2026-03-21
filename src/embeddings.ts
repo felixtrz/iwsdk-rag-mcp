@@ -7,10 +7,10 @@
  * - Model bundled locally to avoid download issues
  */
 
-import { pipeline, env } from '@huggingface/transformers';
+import { existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync } from 'fs';
+import { pipeline, env } from '@huggingface/transformers';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

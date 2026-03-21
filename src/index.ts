@@ -8,6 +8,9 @@
  * elics ECS library, and related dependencies (Three.js, WebXR).
  */
 
+import { readFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -17,16 +20,10 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { FileService } from "./files.js";
 import { SearchService } from "./search.js";
-import {
-  searchCode,
-  findByRelationship,
-  getApiReference,
-  getFileContent,
-  listEcsComponents,
-  listEcsSystems,
-  findDependents,
-  findUsageExamples,
-} from "./tools.js";
+import { findByRelationship, findDependents, findUsageExamples, getApiReference, getFileContent, listEcsComponents, listEcsSystems, searchCode } from "./tools.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const { version } = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8"));
 
 // Create services
 const searchService = new SearchService();
@@ -36,7 +33,7 @@ const fileService = new FileService();
 const server = new Server(
   {
     name: "iwsdk-rag-mcp",
-    version: "0.1.0",
+    version,
   },
   {
     capabilities: {

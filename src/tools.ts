@@ -10,21 +10,11 @@
 import { FileService } from './files.js';
 import type { SearchService } from './search.js';
 import type { Chunk } from './types.js';
+import { toArray } from './utils.js';
 
 export interface ToolResult {
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
-}
-
-/**
- * Helper to safely convert a field to an array
- * IMPORTANT: Handles both arrays and single strings (not splitting strings into chars!)
- */
-function toArray(value: any): string[] {
-  if (!value) {return [];}
-  if (Array.isArray(value)) {return value;}
-  if (typeof value === 'string') {return [value];}  // Return as single-element array
-  return [];
 }
 
 /**

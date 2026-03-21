@@ -7,19 +7,10 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { EmbeddingService, cosineSimilarity } from './embeddings.js';
 import type { Chunk, ChunksData, EmbeddingsData, RawChunk, SearchResult, RelationshipQuery } from './types.js';
+import { toArray } from './utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-/**
- * Helper to safely convert a field to an array
- */
-function toArray(value: any): string[] {
-  if (!value) {return [];}
-  if (Array.isArray(value)) {return value;}
-  if (typeof value === 'string') {return [value];}
-  return [];
-}
 
 export class SearchService {
   private chunks: Chunk[] = [];
@@ -55,7 +46,7 @@ export class SearchService {
       console.error(`  - iwsdk: ${data.iwsdk.length} chunks`);
       console.error(`  - deps: ${data.deps.length} chunks`);
       console.error(`  - embedding dimensions: ${data.dimensions}`);
-    } catch (error) {
+    } catch {
       // Fall back to legacy format
       console.error(`Could not load embeddings.json, trying chunks.json...`);
       const data = JSON.parse(readFileSync(chunksPath, 'utf-8')) as ChunksData;

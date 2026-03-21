@@ -5,14 +5,13 @@
  * Uses ts-morph for parsing and @huggingface/transformers for embeddings.
  */
 
-import { TypeScriptParser } from './ingestion/parser.js';
-import { ASTChunker } from './ingestion/chunker.js';
-import { TypeScriptChunk } from './ingestion/types.js';
-import { EmbeddingService } from '../src/embeddings.js';
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync, cpSync } from 'fs';
 import { resolve, relative, join } from 'path';
 import { glob } from 'glob';
+import { ASTChunker } from './ingestion/chunker.js';
+import { TypeScriptParser } from './ingestion/parser.js';
+import { TypeScriptChunk } from './ingestion/types.js';
 
 const IWSDK_REPO = 'https://github.com/facebook/immersive-web-sdk.git';
 
@@ -313,6 +312,7 @@ class IngestionPipeline {
 
     const allChunks: TypeScriptChunk[] = [];
     let totalSkipped = 0;
+    let parseErrors = 0;
 
     for (let i = 0; i < filtered.length; i++) {
       const file = filtered[i];
@@ -336,12 +336,15 @@ class IngestionPipeline {
           const progress = Math.round(((i + 1) / filtered.length) * 100);
           console.error(`   Progress: ${i + 1}/${filtered.length} files (${progress}%) - ${allChunks.length} chunks so far`);
         }
-      } catch (error) {
-        // Silently skip errors for dependencies
+      } catch {
+        parseErrors++;
       }
     }
 
     console.error('');
+    if (parseErrors > 0) {
+      console.error(`⚠️  Skipped ${parseErrors} files due to parse errors`);
+    }
     if (totalSkipped > 0) {
       console.error(`📊 Filtered out ${totalSkipped} oversized chunks`);
     }

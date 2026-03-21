@@ -2,8 +2,8 @@
  * File service for reading source files
  */
 
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
-import { join, dirname } from 'path';
+import { readFileSync, existsSync } from 'fs';
+import { join, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -80,6 +80,12 @@ export class FileService {
   }): string | null {
     const filePath = this.findFile(relativePath, source);
     if (!filePath) {
+      return null;
+    }
+
+    // Guard against path traversal
+    const resolved = resolve(filePath);
+    if (!resolved.startsWith(resolve(this.sourcesDir))) {
       return null;
     }
 
