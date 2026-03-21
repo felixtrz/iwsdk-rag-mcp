@@ -255,15 +255,64 @@ async function testFindUsageExamples(client) {
   assert(t1.includes('Usage Examples'), 'Returns usage examples header');
 }
 
+async function testPreload() {
+  console.log('\n🔄 Testing --preload flag...');
+
+  const result = await new Promise((resolve, reject) => {
+    const proc = spawn('node', [serverPath, '--preload'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data) => { stdout += data.toString(); });
+    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    const timeout = setTimeout(() => {
+      proc.kill();
+      reject(new Error('--preload timed out after 120s'));
+    }, 120000);
+
+    proc.on('close', (code) => {
+      clearTimeout(timeout);
+      resolve({ code, stdout, stderr });
+    });
+  });
+
+  // Exit code 0
+  assert(result.code === 0, 'Preload exits with code 0', `got code ${result.code}`);
+
+  // Stdout contains structured preload_complete JSON
+  let preloadEvent = null;
+  try {
+    preloadEvent = JSON.parse(result.stdout.trim());
+  } catch { /* not valid JSON */ }
+  assert(preloadEvent !== null, 'Preload stdout is valid JSON', result.stdout.slice(0, 200));
+  assert(preloadEvent?.event === 'preload_complete', 'Preload event is "preload_complete"', `got "${preloadEvent?.event}"`);
+  assert(typeof preloadEvent?.model === 'string' && preloadEvent.model.length > 0, 'Preload includes model name');
+  assert(typeof preloadEvent?.timestamp === 'number', 'Preload includes timestamp');
+
+  // Stderr contains structured model_loaded event
+  const stderrLines = result.stderr.trim().split('\n');
+  const modelLoadedLine = stderrLines.find(line => {
+    try { return JSON.parse(line).event === 'model_loaded'; } catch { return false; }
+  });
+  assert(modelLoadedLine !== undefined, 'Stderr contains model_loaded event');
+}
+
 // ========== MAIN ==========
 
 async function main() {
   console.log('🚀 Starting IWSDK RAG MCP Server tests...\n');
 
+  // Test --preload first (standalone, no MCP client needed)
+  await testPreload();
+
   const client = new MCPTestClient();
   try {
     await client.start();
-    console.log('✅ Server started and initialized\n');
+    console.log('\n✅ Server started and initialized\n');
 
     await testSearchCode(client);
     await testFindByRelationship(client);
