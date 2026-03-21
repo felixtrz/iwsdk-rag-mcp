@@ -10,12 +10,23 @@
 import { pipeline, env } from '@huggingface/transformers';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Resolve bundled model path relative to package root
 function getModelPath(): string {
-  // In dist/, go up one level to reach package root
+  // Walk up from __dirname until we find the model/ directory.
+  // Works for both dist/ (one level up) and dist-tools/src/ (two levels up).
+  let dir = __dirname;
+  for (let i = 0; i < 5; i++) {
+    const candidate = resolve(dir, 'model');
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    dir = resolve(dir, '..');
+  }
+  // Fallback to original behaviour
   return resolve(__dirname, '..', 'model');
 }
 
