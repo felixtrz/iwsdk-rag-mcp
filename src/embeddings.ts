@@ -54,14 +54,14 @@ export class EmbeddingService {
     console.error(JSON.stringify({ event: 'model_loaded', model: this.modelName, timestamp: Date.now() }));
   }
 
-  async embed(text: string): Promise<number[]> {
+  async embed(text: string): Promise<Float32Array> {
     if (!this.extractor) {
       throw new Error('Embedding service not initialized. Call initialize() first.');
     }
 
     const output = await this.extractor(text, { pooling: 'mean', normalize: true });
 
-    return Array.from(output.data as Float32Array);
+    return output.data as Float32Array;
   }
 
 }
@@ -71,7 +71,7 @@ export class EmbeddingService {
  * All embeddings use normalize: true, so ||a|| = ||b|| = 1
  * and cosine_sim(a,b) = a · b.
  */
-export function cosineSimilarity(a: number[], b: number[]): number {
+export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   let dot = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i];

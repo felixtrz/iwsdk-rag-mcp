@@ -246,7 +246,7 @@ export async function searchCode(
 
   try {
     // Request more results than needed for deduplication
-    const requestLimit = Math.min((args.limit ?? 10) * 2, 100);
+    const requestLimit = Math.min(Math.ceil((args.limit ?? 10) * 1.5), 100);
     const results = await searchService.search(args.query, {
       limit: requestLimit,
       source_filter: args.source,

@@ -31,7 +31,7 @@ export interface Chunk {
   content: string;
   contentLower: string;
   metadata: ChunkMetadata;
-  embedding: number[];
+  embedding: Float32Array;
 }
 
 // Raw chunk format from embeddings.json (flattened structure)

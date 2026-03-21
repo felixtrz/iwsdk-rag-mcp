@@ -14,6 +14,7 @@ const __dirname = dirname(__filename);
 
 export class SearchService {
   private chunks: Chunk[] = [];
+  private chunksBySource = new Map<string, Chunk[]>();
   private embeddingService: EmbeddingService;
   private initialized = false;
   private searchCache = new Map<string, { results: SearchResult[]; timestamp: number }>();
@@ -61,6 +62,17 @@ export class SearchService {
       }
     }
 
+    // Build source index for fast filtered searches
+    for (const chunk of this.chunks) {
+      const source = chunk.metadata.source;
+      let arr = this.chunksBySource.get(source);
+      if (!arr) {
+        arr = [];
+        this.chunksBySource.set(source, arr);
+      }
+      arr.push(chunk);
+    }
+
     // Initialize embedding service
     await this.embeddingService.initialize();
 
@@ -76,7 +88,7 @@ export class SearchService {
       id,
       content: raw.content,
       contentLower: raw.content.toLowerCase(),
-      embedding: raw.embedding,
+      embedding: new Float32Array(raw.embedding),
       metadata: {
         source: raw.source,
         file_path: raw.file_path,
@@ -117,22 +129,26 @@ export class SearchService {
     const limit = options.limit ?? 10;
     const minScore = options.min_score ?? 0.0;
 
-    // Check cache
+    // Check cache (delete+reinsert for LRU ordering)
     const cacheKey = `${query}|${JSON.stringify(options)}`;
     const cached = this.searchCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL_MS) {
+      this.searchCache.delete(cacheKey);
+      this.searchCache.set(cacheKey, cached);
       return cached.results;
     }
 
     // Generate query embedding
     const queryEmbedding = await this.embeddingService.embed(query);
 
-    // Filter chunks by source if specified
-    let searchableChunks = this.chunks;
+    // Use source index for filtered searches to avoid scanning all chunks
+    let searchableChunks: Chunk[];
     if (options.source_filter && options.source_filter.length > 0) {
-      searchableChunks = this.chunks.filter(chunk =>
-        options.source_filter!.includes(chunk.metadata.source)
+      searchableChunks = options.source_filter.flatMap(
+        source => this.chunksBySource.get(source) ?? []
       );
+    } else {
+      searchableChunks = this.chunks;
     }
 
     // Calculate similarity scores
@@ -147,7 +163,7 @@ export class SearchService {
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
 
-    // Cache results
+    // Cache results (evict LRU entry if at capacity)
     if (this.searchCache.size >= this.CACHE_MAX_SIZE) {
       const oldest = this.searchCache.keys().next().value;
       if (oldest !== undefined) {
@@ -218,21 +234,14 @@ export class SearchService {
       throw new Error('Search service not initialized. Call initialize() first.');
     }
 
-    let results = this.chunks.filter(chunk =>
-      chunk.metadata.name.toLowerCase().includes(name.toLowerCase())
-    );
-
-    if (options.chunk_type) {
-      results = results.filter(chunk => chunk.metadata.chunk_type === options.chunk_type);
-    }
-
-    if (options.source_filter && options.source_filter.length > 0) {
-      results = results.filter(chunk =>
-        options.source_filter!.includes(chunk.metadata.source)
-      );
-    }
-
-    return results;
+    const nameLower = name.toLowerCase();
+    return this.chunks.filter(chunk => {
+      if (!chunk.metadata.name.toLowerCase().includes(nameLower)) { return false; }
+      if (options.chunk_type && chunk.metadata.chunk_type !== options.chunk_type) { return false; }
+      if (options.source_filter && options.source_filter.length > 0 &&
+          !options.source_filter.includes(chunk.metadata.source)) { return false; }
+      return true;
+    });
   }
 
   /**
